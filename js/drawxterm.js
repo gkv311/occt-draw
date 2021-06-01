@@ -28,6 +28,102 @@ var aTermHistoryPos = -1;
 var aNbTermInProgress = 0;
 var isWasmLoaded = false;
 
+//! Print normal message into terminal.
+function termPrintMessage (theText)
+{
+  aTerm.write ("\n\r" + theText);
+}
+
+//! Print trace message into terminal.
+function termPrintTrace (theText)
+{
+  aTerm.write ("\n\r\x1B[33m" + theText + "\x1B[0m");
+}
+
+//! Print info message into terminal.
+function termPrintInfo (theText)
+{
+  aTerm.write ("\n\r\x1B[32;1m" + theText + "\x1B[0m");
+}
+
+//! Print warning message into terminal.
+function termPrintWarning (theText)
+{
+  aTerm.write ("\n\r\x1B[33;1m" + theText + "\x1B[0m");
+}
+
+//! Print error message into terminal.
+function termPrintError (theText)
+{
+  aTerm.write ("\n\r\x1B[31;1m" + theText + "\x1B[0m");
+}
+
+//! Function to download data to a file.
+function termFileDownload (theData, theFileName, theType)
+{
+  var aFileBlob = new Blob ([theData], {type: theType});
+  var aLinkElem = document.createElement("a");
+  var anUrl = URL.createObjectURL (aFileBlob);
+  aLinkElem.href = anUrl;
+  aLinkElem.download = theFileName;
+  document.body.appendChild (aLinkElem);
+  aLinkElem.click();
+  setTimeout (function() {
+    document.body.removeChild (aLinkElem);
+    window.URL.revokeObjectURL (anUrl);
+  }, 0);
+}
+
+//! Evaluate a jsdownload command.
+function termJsdownload (theArgs)
+{
+  console.warn(" @@ termJsdownload (" + theArgs + ")");
+  var anArgs = theArgs.split (" ");
+  if (theArgs === "" || (anArgs.length != 1 && anArgs.length != 2))
+  {
+    termPrintError ("Syntax error: wrong number of arguments");
+    return;
+  }
+  var aFilePath = anArgs[0];
+  var aFileName = aFilePath;
+  if (anArgs.length >= 2)
+  {
+    aFileName = anArgs[1];
+  }
+  else
+  {
+    var aPathSplit = aFilePath.split ("/");
+    if (aPathSplit.length > 1)
+    {
+      aFileName = aPathSplit[aPathSplit.length - 1];
+    }
+  }
+
+  var aNameLower = aFilePath.toLowerCase();
+  var aType = "application/octet-stream";
+  if (aNameLower.endsWith (".png"))
+  {
+    aType = "image/png";
+  }
+  else if (aNameLower.endsWith (".jpg")
+        || aNameLower.endsWith (".jpeg"))
+  {
+    aType = "image/jpeg";
+  }
+  try
+  {
+    var aData = DRAWEXE.FS.readFile (aFilePath);
+    //console.warn(" @@ aData= (" + aData + ")");
+    termPrintMessage ("downloading file '" + aFileName + "' of size " + aData.length + " bytes...");
+    termFileDownload (aData, aFileName, aType);
+  }
+  catch (theError)
+  {
+    termPrintError ("Error: file '" + aFilePath + "' cannot be read with " + theError);
+    return;
+  }
+}
+
 //! Move terminal input to the newline with the "Draw> " prefix.
 function termPrintInputLine (theLine)
 {
@@ -43,7 +139,18 @@ function termEvaluateCommand (theCmd)
   {
     aTermHistoryPos = -1;
     aTermHistory.push (theCmd);
-    DRAWEXE.eval (theCmd);
+    if (theCmd.startsWith ("jsdownload "))
+    {
+      termJsdownload (theCmd.substring (11).trim());
+    }
+    else if (theCmd.startsWith ("jsdown "))
+    {
+      termJsdownload (theCmd.substring (7).trim());
+    }
+    else
+    {
+      DRAWEXE.eval (theCmd);
+    }
   }
   --aNbTermInProgress;
 }
@@ -228,23 +335,23 @@ var DRAWEXE =
   },
   printMessage: function(theText, theGravity) {
     //console.warn(" @@ printMessage (" + theText + ")");
-    aTerm.write ("\n\r");
     switch (theGravity)
     {
       case 0: // trace
-        aTerm.write ("\x1B[33m" + theText + "\x1B[0m");
+        termPrintTrace (theText);
         return;
       case 1: // info
-        aTerm.write ("\x1B[32;1m" + theText + "\x1B[0m");
+        termPrintInfo (theText);
         return;
       case 2: // warning
-        aTerm.write ("\x1B[33;1m" + theText + "\x1B[0m");
+        termPrintWarning (theText);
         return;
       case 3: // alarm
       case 4: // fail
-        aTerm.write ("\x1B[31;1m" + theText + "\x1B[0m");
+        termPrintError (theText);
         return;
     }
+    aTerm.write ("\n\r");
     aTerm.write (theText);
   },
   canvas: (function() {
@@ -271,6 +378,13 @@ DRAWEXEInitialized.then(function(Module) {
     isWasmLoaded = true;
     aTerm.write ("\n\r");
     //DRAWEXE.eval("dversion");
+
+    // register JavaScript commands
+    DRAWEXE.eval ("help jsdownload "
+                + "{jsdownload filePath [fileName]"
+                + "\n\t\t: Download file from emulated file system}"
+                + " {JavaScript commands}");
+
     termPrintInputLine ("");
   }
 });
