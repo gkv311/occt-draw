@@ -62,7 +62,7 @@ function termPrintError (theText)
 function termFileDownload (theData, theFileName, theType)
 {
   var aFileBlob = new Blob ([theData], {type: theType});
-  var aLinkElem = document.createElement("a");
+  var aLinkElem = document.createElement ("a");
   var anUrl = URL.createObjectURL (aFileBlob);
   aLinkElem.href = anUrl;
   aLinkElem.download = theFileName;
@@ -74,10 +74,9 @@ function termFileDownload (theData, theFileName, theType)
   }, 0);
 }
 
-//! Evaluate a jsdownload command.
+//! Evaluate jsdownload command downloading file from emulated file system.
 function termJsdownload (theArgs)
 {
-  console.warn(" @@ termJsdownload (" + theArgs + ")");
   var anArgs = theArgs.split (" ");
   if (theArgs === "" || (anArgs.length != 1 && anArgs.length != 2))
   {
@@ -113,7 +112,6 @@ function termJsdownload (theArgs)
   try
   {
     var aData = DRAWEXE.FS.readFile (aFilePath);
-    //console.warn(" @@ aData= (" + aData + ")");
     termPrintMessage ("downloading file '" + aFileName + "' of size " + aData.length + " bytes...");
     termFileDownload (aData, aFileName, aType);
   }
@@ -121,6 +119,111 @@ function termJsdownload (theArgs)
   {
     termPrintError ("Error: file '" + aFilePath + "' cannot be read with " + theError);
     return;
+  }
+}
+
+//! Fetch remote file from specified URL and upload it to emulated file system.
+function termJsuploadUrl (theFileUrl, theFilePath)
+{
+  var aPathSplit = theFileUrl.split ("/");
+  var aFileName  = theFileUrl;
+  if (aPathSplit.length > 1)
+  {
+    aFileName = aPathSplit[aPathSplit.length - 1];
+  }
+
+  var aFilePath = theFilePath;
+  if (aFilePath === "")
+  {
+    aFilePath = aFileName;
+  }
+
+  const aCheckStatusFunc = function (theResponse)
+  {
+    if (!theResponse.ok)
+    {
+      throw new Error (`HTTP ${theResponse.status} - ${theResponse.statusText}`);
+    }
+    return theResponse;
+  };
+  fetch (theFileUrl)
+  .then (theResponse => aCheckStatusFunc (theResponse) && theResponse.arrayBuffer())
+  .then (theBuffer => {
+    var aDataArray = new Uint8Array (theBuffer);
+    termPrintMessage ("uploading file '" + aFileName + "' of size " + aDataArray.length + " bytes to '" + aFilePath + "'...");
+    DRAWEXE.FS.writeFile (aFilePath, aDataArray);
+    termPrintInputLine ("");
+  })
+  .catch (theErr => {
+    termPrintError ("Error: " + theErr);
+    termPrintInputLine ("");
+  });
+}
+
+var termHiddenFileInput = null;
+//! Specify file on the local file system and upload it to emulated file system.
+function termJsuploadFile (theFilePath)
+{
+  if (termHiddenFileInput == null)
+  {
+    termHiddenFileInput = document.createElement ("input");
+    termHiddenFileInput.type = "file";
+    termHiddenFileInput.style = "visibility:hidden";
+    document.body.appendChild (termHiddenFileInput);
+  }
+
+  termHiddenFileInput.onchange = function()
+  {
+    if (termHiddenFileInput.files.length == 0)
+    {
+      termPrintError ("Error: no file chosen");
+      return;
+    }
+
+    var aFile = termHiddenFileInput.files[0];
+    var aReader = new FileReader();
+    aReader.onload = function()
+    {
+      var aFilePath = theFilePath;
+      if (aFilePath === "")
+      {
+        aFilePath = aFile.name;
+      }
+
+      var aDataArray = new Uint8Array (aReader.result);
+      termPrintMessage ("uploading file '" + aFile.name + "' of size " + aDataArray.length + " bytes to '" + aFilePath + "'...");
+      DRAWEXE.FS.writeFile (aFilePath, aDataArray);
+      termPrintInputLine ("")
+    };
+    aReader.readAsArrayBuffer (aFile);
+  };
+  termHiddenFileInput.click();
+}
+
+//! Evaluate jsupload command uploaded file to emulated file system.
+function termJsupload (theArgs)
+{
+  var anArgs = theArgs.split (" ");
+  if (theArgs === "" || (anArgs.length != 1 && anArgs.length != 2))
+  {
+    termPrintError ("Syntax error: wrong number of arguments");
+    return;
+  }
+
+  var aFileUrl = anArgs[0];
+  var aFilePath = "";
+  if (anArgs.length >= 2)
+  {
+    aFilePath = anArgs[1];
+  }
+
+  if (aFileUrl === ".")
+  {
+    termJsuploadFile (aFilePath)
+  }
+  else
+  {
+    termJsuploadUrl (aFileUrl, aFilePath);
   }
 }
 
@@ -146,6 +249,10 @@ function termEvaluateCommand (theCmd)
     else if (theCmd.startsWith ("jsdown "))
     {
       termJsdownload (theCmd.substring (7).trim());
+    }
+    else if (theCmd.startsWith ("jsupload "))
+    {
+      termJsupload (theCmd.substring (9).trim());
     }
     else
     {
@@ -382,7 +489,15 @@ DRAWEXEInitialized.then(function(Module) {
     // register JavaScript commands
     DRAWEXE.eval ("help jsdownload "
                 + "{jsdownload filePath [fileName]"
-                + "\n\t\t: Download file from emulated file system}"
+                + "\n\t\t: Download file from emulated file system"
+                + "\n\t\t:   filePath file path within emulated file system to download;"
+                + "\n\t\t:   fileName file name to download.}"
+                + " {JavaScript commands}");
+    DRAWEXE.eval ("help jsupload "
+                + "{jsupload fileUrl [filePath]"
+                + "\n\t\t: Upload file to emulated file system"
+                + "\n\t\t:   fileUrl  URL on server or . to show open file dialog;"
+                + "\n\t\t:   filePath file path within emulated file system to create.}"
                 + " {JavaScript commands}");
 
     termPrintInputLine ("");
