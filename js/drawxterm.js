@@ -181,9 +181,9 @@ var DRAWEXE =
 
   /**
    * Function to download data to a file.
-   * @param theData [in] data to download
-   * @param theFileName [in] default file name to download data as
-   * @param theType [in] data MIME type
+   * @param {Uint8Array} theData [in] data to download
+   * @param {string} theFileName [in] default file name to download data as
+   * @param {string} theType [in] data MIME type
    */
   downloadDataFile: function (theData, theFileName, theType)
   {
@@ -202,8 +202,8 @@ var DRAWEXE =
 
   /**
    * Fetch remote file from specified URL and upload it to emulated file system.
-   * @param theFileUrl  [in] URL to load
-   * @param theFilePath [in] file path on emulated file system (or empty string to take name from URL)
+   * @param {string} theFileUrl  [in] URL to load
+   * @param {string} theFilePath [in] file path on emulated file system (or empty string to take name from URL)
    */
   uploadUrl: function (theFileUrl, theFilePath)
   {
@@ -241,7 +241,7 @@ var DRAWEXE =
 
   /**
    * Specify file on the local file system and upload it to emulated file system.
-   * @param theFilePath [in] file path on emulated file system (or empty string to take name from file)
+   * @param {string} theFilePath [in] file path on emulated file system (or empty string to take name from file)
    */
   uploadFile: function (theFilePath)
   {
