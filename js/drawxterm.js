@@ -7,8 +7,8 @@
  */
 var DRAWEXE =
 {
-//! @name Main interface
-//! @{
+
+//#region Main interface
 
   /**
    * Check browser support.
@@ -278,10 +278,9 @@ var DRAWEXE =
     };
     this._myFileInput.click();
   },
-//! @}
+//#endregion
 
-//! @name Internal methods
-//! @{
+//!#region Internal methods
 
   /**
    * Stab indicating some progress while "DRAWEXE.wasm" is not yet loaded.
@@ -400,10 +399,9 @@ var DRAWEXE =
       }
     }
   },
-//! @}
+//#endregion
 
-//! @name Additional Tcl commands implemented in JavaScript
-//! @{
+//#region Additional Tcl commands implemented in JavaScript
 
   /**
    * Evaluate jsdownload command downloading file from emulated file system.
@@ -483,10 +481,9 @@ var DRAWEXE =
       this.uploadUrl (aFileUrl, aFilePath);
     }
   },
-//! @}
+//#endregion
 
-//! @name WebAssembly module interface
-//! @{
+//#region WebAssembly module interface
 
   /**
    * C++ std::cout callback redirecting to Terminal.
@@ -555,10 +552,9 @@ var DRAWEXE =
   onRuntimeInitialized: function() {
     //
   },
-//! @}
+//#endregion
 
-//! @name Class properties
-//! @{
+//#region Class properties
 
   /**
    * Terminal object.
@@ -604,7 +600,7 @@ var DRAWEXE =
    * Hidden file input field.
    */
   _myFileInput: null
-//! @}
+//#endregion
 };
 
 // Try some workarounds to avoid terminal being displayed with standard fonts
