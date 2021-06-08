@@ -48,7 +48,13 @@ class DrawTerm
     this._myIsWasmLoaded = false; // WASM loading state
     this._myFileInput = null;     // Hidden file input field
 
-    this.canvas = document.getElementById ('occViewerCanvas'); // canvas element for OpenGL context.
+    // define WebGL canvas for WebAssembly viewer
+    this.canvas = document.getElementById ('occViewerCanvas'); // canvas element for OpenGL context
+
+    // bind WebAssembly callbacks to this context
+    this.print        = this.print.bind (this);
+    this.printErr     = this.printErr.bind (this);
+    this.printMessage = this.printMessage.bind (this);
   //#endregion
 
     this._myTerm = new Terminal({
@@ -505,8 +511,8 @@ class DrawTerm
    */
   print (theText) {
     console.warn (theText);
-    DRAWEXE.terminalWrite ("\n\r");
-    DRAWEXE.terminalWrite (theText);
+    this.terminalWrite ("\n\r");
+    this.terminalWrite (theText);
   }
 
   /**
@@ -514,8 +520,8 @@ class DrawTerm
    */
   printErr (theText) {
     console.warn (theText);
-    DRAWEXE.terminalWrite ("\n\r");
-    DRAWEXE.terminalWrite (theText);
+    this.terminalWrite ("\n\r");
+    this.terminalWrite (theText);
   }
 
   /**
@@ -526,21 +532,21 @@ class DrawTerm
     switch (theGravity)
     {
       case 0: // trace
-        DRAWEXE.terminalWriteTrace (theText);
+        this.terminalWriteTrace (theText);
         return;
       case 1: // info
-        DRAWEXE.terminalWriteInfo (theText);
+        this.terminalWriteInfo (theText);
         return;
       case 2: // warning
-        DRAWEXE.terminalWriteWarning (theText);
+        this.terminalWriteWarning (theText);
         return;
       case 3: // alarm
       case 4: // fail
-        DRAWEXE.terminalWriteError (theText);
+        this.terminalWriteError (theText);
         return;
     }
-    DRAWEXE.terminalWrite ("\n\r");
-    DRAWEXE.terminalWrite (theText);
+    this.terminalWrite ("\n\r");
+    this.terminalWrite (theText);
   }
 
   /**
@@ -593,6 +599,11 @@ class DrawTerm
 //! Create WebAssembly module instance and wait.
 var DRAWEXE = new DrawTerm();
 var aDrawWasmLoader = createDRAWEXE (DRAWEXE);
+aDrawWasmLoader.catch ((theError) =>
+{
+  DRAWEXE._myIsWasmLoaded = true;
+  DRAWEXE.terminalWriteError ("WebAssebly initialization has failed:\r\n" + theError);
+});
 
 document.fonts.ready.then ((theFontFaceSet) => {
   // Try some workarounds to avoid terminal being displayed with standard fonts
@@ -607,4 +618,7 @@ document.fonts.ready.then ((theFontFaceSet) => {
 {
   DRAWEXE._onWasmCreated (theModule)
   return Promise.resolve (true);
+}).catch ((theError) =>
+{
+  //
 });
