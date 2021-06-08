@@ -27,7 +27,7 @@ var DRAWEXE =
         }
       }
     }
-    catch (e) {}
+    catch (theErr) {}
     return false;
   },
 
@@ -165,7 +165,7 @@ var DRAWEXE =
    */
   termEvaluate: function (theToPrint)
   {
-    var aCmd = this._myTermLine;
+    let aCmd = this._myTermLine;
     this._myTermLine = "";
     //console.warn(" @@ termEvaluate (" + aCmd + ")");
 
@@ -187,9 +187,9 @@ var DRAWEXE =
    */
   downloadDataFile: function (theData, theFileName, theType)
   {
-    var aFileBlob = new Blob ([theData], {type: theType});
-    var aLinkElem = document.createElement ("a");
-    var anUrl = URL.createObjectURL (aFileBlob);
+    let aFileBlob = new Blob ([theData], { type: theType });
+    let aLinkElem = document.createElement ("a");
+    let anUrl = URL.createObjectURL (aFileBlob);
     aLinkElem.href = anUrl;
     aLinkElem.download = theFileName;
     document.body.appendChild (aLinkElem);
@@ -207,14 +207,14 @@ var DRAWEXE =
    */
   uploadUrl: function (theFileUrl, theFilePath)
   {
-    var aPathSplit = theFileUrl.split ("/");
-    var aFileName  = theFileUrl;
+    let aPathSplit = theFileUrl.split ("/");
+    let aFileName  = theFileUrl;
     if (aPathSplit.length > 1)
     {
       aFileName = aPathSplit[aPathSplit.length - 1];
     }
 
-    var aFilePath = theFilePath;
+    let aFilePath = theFilePath;
     if (aFilePath === "")
     {
       aFilePath = aFileName;
@@ -228,7 +228,7 @@ var DRAWEXE =
     fetch (theFileUrl)
     .then (theResponse => aCheckStatusFunc (theResponse) && theResponse.arrayBuffer())
     .then (theBuffer => {
-      var aDataArray = new Uint8Array (theBuffer);
+      let aDataArray = new Uint8Array (theBuffer);
       this.terminalWriteLine ("uploading file '" + aFileName + "' of size " + aDataArray.length + " bytes to '" + aFilePath + "'...");
       this.FS.writeFile (aFilePath, aDataArray);
       this.terminalPrintInputLine ("");
@@ -260,16 +260,16 @@ var DRAWEXE =
         return;
       }
 
-      var aFile = this._myFileInput.files[0];
-      var aReader = new FileReader();
+      let aFile = this._myFileInput.files[0];
+      let aReader = new FileReader();
       aReader.onload = () => {
-        var aFilePath = theFilePath;
+        let aFilePath = theFilePath;
         if (aFilePath === "")
         {
           aFilePath = aFile.name;
         }
 
-        var aDataArray = new Uint8Array (aReader.result);
+        let aDataArray = new Uint8Array (aReader.result);
         this.terminalWriteLine ("uploading file '" + aFile.name + "' of size " + aDataArray.length + " bytes to '" + aFilePath + "'...");
         this.FS.writeFile (aFilePath, aDataArray);
         this.terminalPrintInputLine ("")
@@ -303,7 +303,7 @@ var DRAWEXE =
       case 40: // ArrowDown
       {
         // override up/down arrows to navigate through input history
-        var aDir = theEvent.keyCode === 38 ? -1 : 1;
+        let aDir = theEvent.keyCode === 38 ? -1 : 1;
         if (theEvent.type !== "keydown")
         {
           return false;
@@ -330,7 +330,7 @@ var DRAWEXE =
           this._myTermHistoryPos = this._myTermHistory.length - 1;
         }
 
-        var aHist = this._myTermHistory[this._myTermHistoryPos];
+        let aHist = this._myTermHistory[this._myTermHistoryPos];
         this._myTermLine = aHist;
         this.terminalWrite (aHist);
         return false;
@@ -357,8 +357,8 @@ var DRAWEXE =
    */
   _onTermDataInput: function (theEvent)
   {
-    var aNbNewLines = 0;
-    for (var anIter = 0; anIter < theEvent.length; ++anIter)
+    let aNbNewLines = 0;
+    for (let anIter = 0; anIter < theEvent.length; ++anIter)
     {
       let aChar = theEvent.charAt (anIter);
       if (aChar === "\x7f")
@@ -408,30 +408,30 @@ var DRAWEXE =
    */
   _commandJsdownload: function (theArgs)
   {
-    var anArgs = theArgs.split (" ");
+    let anArgs = theArgs.split (" ");
     if (theArgs === "" || (anArgs.length != 1 && anArgs.length != 2))
     {
       this.terminalWriteError ("Syntax error: wrong number of arguments");
       return;
     }
 
-    var aFilePath = anArgs[0];
-    var aFileName = aFilePath;
+    let aFilePath = anArgs[0];
+    let aFileName = aFilePath;
     if (anArgs.length >= 2)
     {
       aFileName = anArgs[1];
     }
     else
     {
-      var aPathSplit = aFilePath.split ("/");
+      let aPathSplit = aFilePath.split ("/");
       if (aPathSplit.length > 1)
       {
         aFileName = aPathSplit[aPathSplit.length - 1];
       }
     }
 
-    var aNameLower = aFilePath.toLowerCase();
-    var aType = "application/octet-stream";
+    let aNameLower = aFilePath.toLowerCase();
+    let aType = "application/octet-stream";
     if (aNameLower.endsWith (".png"))
     {
       aType = "image/png";
@@ -443,7 +443,7 @@ var DRAWEXE =
     }
     try
     {
-      var aData = this.FS.readFile (aFilePath);
+      let aData = this.FS.readFile (aFilePath);
       this.terminalWriteLine ("downloading file '" + aFileName + "' of size " + aData.length + " bytes...");
       this.downloadDataFile (aData, aFileName, aType);
     }
@@ -458,15 +458,15 @@ var DRAWEXE =
    */
   _commandJsupload: function (theArgs)
   {
-    var anArgs = theArgs.split (" ");
+    let anArgs = theArgs.split (" ");
     if (theArgs === "" || (anArgs.length != 1 && anArgs.length != 2))
     {
       this.terminalWriteError ("Syntax error: wrong number of arguments");
       return;
     }
 
-    var aFileUrl = anArgs[0];
-    var aFilePath = "";
+    let aFileUrl = anArgs[0];
+    let aFilePath = "";
     if (anArgs.length >= 2)
     {
       aFilePath = anArgs[1];
@@ -532,7 +532,7 @@ var DRAWEXE =
    * Callback returning canvas element for OpenGL context.
    */
   canvas: (function() {
-    var aCanvas = document.getElementById('occViewerCanvas');
+    let aCanvas = document.getElementById('occViewerCanvas');
     return aCanvas;
   })(),
 
