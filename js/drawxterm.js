@@ -5,7 +5,7 @@
 /**
  * Main class interface - used as a base for initialization of WebAssembly module.
  */
-var DRAWEXE =
+class DrawTerm
 {
 
 //#region Main interface
@@ -13,7 +13,7 @@ var DRAWEXE =
   /**
    * Check browser support.
    */
-  isWasmSupported: function()
+  isWasmSupported() // static
   {
     try
     {
@@ -29,13 +29,28 @@ var DRAWEXE =
     }
     catch (theErr) {}
     return false;
-  },
+  }
 
   /**
-   * Terminal setup - should be called before terminal usage.
+   * Terminal setup.
    */
-  termInit: function()
+  constructor()
   {
+  //#region Class properties
+    // use old initialization style for compatibility with old browsers
+    this._myTerm = null;          // Terminal object
+    this._myTermHello = "Draw";   // Terminal hello message
+    this._myTermInCounter = 0;    // Number of manually entered into Terminal commands
+    this._myTermLine = "";        // Terminal input
+    this._myTermHistory = [];     // Commands input history (activated by up/down arrows)
+    this._myTermHistoryPos  = -1; // Currently displayed item from commands input history (activated by up/down arrows)
+    this._myNbTermInProgress = 0; // Number of commands queued for sequential processing via setTimout()
+    this._myIsWasmLoaded = false; // WASM loading state
+    this._myFileInput = null;     // Hidden file input field
+
+    this.canvas = document.getElementById ('occViewerCanvas'); // canvas element for OpenGL context.
+  //#endregion
+
     this._myTerm = new Terminal({
       cols: 120,
       //fontFamily: `'Courier'`,
@@ -60,72 +75,72 @@ var DRAWEXE =
     this._myTerm.attachCustomKeyEventHandler (theEvent => { return this._onTermKeyEvent (theEvent) });
     this._myTerm.onData ((theEvent) => { this._onTermDataInput (theEvent) });
     this._myTerm.focus();
-  },
+  }
 
   /**
    * Print text into terminal.
    */
-  terminalWrite: function (theText)
+  terminalWrite (theText)
   {
     if (this._myTerm != null)
     {
       this._myTerm.write (theText);
     }
-  },
+  }
 
   /**
    * Print normal message into terminal.
    */
-  terminalWriteLine: function (theText)
+  terminalWriteLine (theText)
   {
     this.terminalWrite ("\n\r" + theText);
-  },
+  }
 
   /**
    * Print trace message into terminal.
    */
-  terminalWriteTrace: function (theText)
+  terminalWriteTrace (theText)
   {
     this.terminalWrite ("\n\r\x1B[33m" + theText + "\x1B[0m");
-  },
+  }
 
   /**
    * Print info message into terminal.
    */
-  terminalWriteInfo: function (theText)
+  terminalWriteInfo (theText)
   {
     this.terminalWrite ("\n\r\x1B[32;1m" + theText + "\x1B[0m");
-  },
+  }
 
   /**
    * Print warning message into terminal.
    */
-  terminalWriteWarning: function (theText)
+  terminalWriteWarning (theText)
   {
     this.terminalWrite ("\n\r\x1B[33;1m" + theText + "\x1B[0m");
-  },
+  }
 
   /**
    * Print error message into terminal.
    */
-  terminalWriteError: function (theText)
+  terminalWriteError (theText)
   {
     this.terminalWrite ("\n\r\x1B[31;1m" + theText + "\x1B[0m");
-  },
+  }
 
   /**
    * Move terminal input to the newline with the "Draw> " prefix.
    */
-  terminalPrintInputLine: function (theLine)
+  terminalPrintInputLine (theLine)
   {
     this.terminalWrite ("\n\r");
     this.terminalWrite ("\x1B[32;1m" + this._myTermHello + "[" + (++this._myTermInCounter) + "]>\x1B[0m ");
-  },
+  }
 
   /**
    * Evaluate a command from the queue.
    */
-  termEvaluateCommand: function (theCmd)
+  termEvaluateCommand (theCmd)
   {
     //console.warn(" @@ termEvaluateCommand (" + theCmd + ")");
     if (theCmd !== "")
@@ -158,12 +173,12 @@ var DRAWEXE =
       }
     }
     --this._myNbTermInProgress;
-  },
+  }
 
   /**
    * Put command into the execution queue.
    */
-  termEvaluate: function (theToPrint)
+  termEvaluate (theToPrint)
   {
     let aCmd = this._myTermLine;
     this._myTermLine = "";
@@ -177,7 +192,7 @@ var DRAWEXE =
       this.termEvaluateCommand (aCmd);
       this.terminalPrintInputLine ("");
     }, (this._myNbTermInProgress - 1) * 10);
-  },
+  }
 
   /**
    * Function to download data to a file.
@@ -185,7 +200,7 @@ var DRAWEXE =
    * @param {string} theFileName [in] default file name to download data as
    * @param {string} theType [in] data MIME type
    */
-  downloadDataFile: function (theData, theFileName, theType)
+  downloadDataFile (theData, theFileName, theType)
   {
     let aFileBlob = new Blob ([theData], { type: theType });
     let aLinkElem = document.createElement ("a");
@@ -198,14 +213,14 @@ var DRAWEXE =
       document.body.removeChild (aLinkElem);
       window.URL.revokeObjectURL (anUrl);
     }, 0);
-  },
+  }
 
   /**
    * Fetch remote file from specified URL and upload it to emulated file system.
    * @param {string} theFileUrl  [in] URL to load
    * @param {string} theFilePath [in] file path on emulated file system (or empty string to take name from URL)
    */
-  uploadUrl: function (theFileUrl, theFilePath)
+  uploadUrl (theFileUrl, theFilePath)
   {
     let aPathSplit = theFileUrl.split ("/");
     let aFileName  = theFileUrl;
@@ -237,13 +252,13 @@ var DRAWEXE =
       this.terminalWriteError ("Error: " + theErr);
       this.terminalPrintInputLine ("");
     });
-  },
+  }
 
   /**
    * Specify file on the local file system and upload it to emulated file system.
    * @param {string} theFilePath [in] file path on emulated file system (or empty string to take name from file)
    */
-  uploadFile: function (theFilePath)
+  uploadFile (theFilePath)
   {
     if (this._myFileInput == null)
     {
@@ -277,7 +292,7 @@ var DRAWEXE =
       aReader.readAsArrayBuffer (aFile);
     };
     this._myFileInput.click();
-  },
+  }
 //#endregion
 
 //!#region Internal methods
@@ -285,17 +300,17 @@ var DRAWEXE =
   /**
    * Stab indicating some progress while "DRAWEXE.wasm" is not yet loaded.
    */
-  _termWasmLoadProgress: function()
+  _termWasmLoadProgress()
   {
     if (this._myIsWasmLoaded) { return; }
     this.terminalWrite (".");
     setTimeout (() => { this._termWasmLoadProgress() }, 1000);
-  },
+  }
 
   /**
    * Terminal custom key event handler.
    */
-  _onTermKeyEvent: function (theEvent)
+  _onTermKeyEvent (theEvent)
   {
     switch (theEvent.keyCode)
     {
@@ -350,12 +365,12 @@ var DRAWEXE =
       }
     }
     return true;
-  },
+  }
 
   /**
    * Terminal data input callback.
    */
-  _onTermDataInput: function (theEvent)
+  _onTermDataInput (theEvent)
   {
     let aNbNewLines = 0;
     for (let anIter = 0; anIter < theEvent.length; ++anIter)
@@ -398,7 +413,7 @@ var DRAWEXE =
         this._myTermLine += aChar;
       }
     }
-  },
+  }
 //#endregion
 
 //#region Additional Tcl commands implemented in JavaScript
@@ -406,7 +421,7 @@ var DRAWEXE =
   /**
    * Evaluate jsdownload command downloading file from emulated file system.
    */
-  _commandJsdownload: function (theArgs)
+  _commandJsdownload (theArgs)
   {
     let anArgs = theArgs.split (" ");
     if (theArgs === "" || (anArgs.length != 1 && anArgs.length != 2))
@@ -451,12 +466,12 @@ var DRAWEXE =
     {
       this.terminalWriteError ("Error: file '" + aFilePath + "' cannot be read with " + theError);
     }
-  },
+  }
 
   /**
    * Evaluate jsupload command uploaded file to emulated file system.
    */
-  _commandJsupload: function (theArgs)
+  _commandJsupload (theArgs)
   {
     let anArgs = theArgs.split (" ");
     if (theArgs === "" || (anArgs.length != 1 && anArgs.length != 2))
@@ -480,7 +495,7 @@ var DRAWEXE =
     {
       this.uploadUrl (aFileUrl, aFilePath);
     }
-  },
+  }
 //#endregion
 
 //#region WebAssembly module interface
@@ -488,25 +503,25 @@ var DRAWEXE =
   /**
    * C++ std::cout callback redirecting to Terminal.
    */
-  print: function (theText) {
+  print (theText) {
     console.warn (theText);
     DRAWEXE.terminalWrite ("\n\r");
     DRAWEXE.terminalWrite (theText);
-  },
+  }
 
   /**
    * C++ std::cerr callback redirecting to Terminal.
    */
-  printErr: function (theText) {
+  printErr (theText) {
     console.warn (theText);
     DRAWEXE.terminalWrite ("\n\r");
     DRAWEXE.terminalWrite (theText);
-  },
+  }
 
   /**
    * C++ Message::Send() callback redirecting to Terminal.
    */
-  printMessage: function (theText, theGravity) {
+  printMessage (theText, theGravity) {
     //console.warn(" @@ printMessage (" + theText + ")");
     switch (theGravity)
     {
@@ -526,118 +541,70 @@ var DRAWEXE =
     }
     DRAWEXE.terminalWrite ("\n\r");
     DRAWEXE.terminalWrite (theText);
-  },
-
-  /**
-   * Callback returning canvas element for OpenGL context.
-   */
-  canvas: (function() {
-    let aCanvas = document.getElementById('occViewerCanvas');
-    return aCanvas;
-  })(),
+  }
 
   /**
    * Callback returning file path for loading WebAssembly components.
    */
-  locateFile: function(thePath, thePrefix) {
+  locateFile (thePath, thePrefix) {
     //console.warn(" @@ locateFile(" + thePath + ", " + thePrefix + ")");
     // thePrefix is JS file directory - override location of our DRAWEXE.data
     //return thePrefix + thePath;
     return "wasm32/" + thePath;
-  },
+  }
 
   /**
    * WebAssembly module callback on runtime initialization.
    */
-  onRuntimeInitialized: function() {
+  onRuntimeInitialized() {
     //
-  },
+  }
+
+  /**
+   * WASM creation callback - manually called from Promise.
+   */
+  _onWasmCreated (theModule)
+  {
+    //let Module = theModule;
+    this._myIsWasmLoaded = true;
+    this.terminalWrite ("\n\r");
+    //this.eval ("dversion");
+
+    // register JavaScript commands
+    this.eval ("help jsdownload "
+             + "{jsdownload filePath [fileName]"
+             + "\n\t\t: Download file from emulated file system"
+             + "\n\t\t:   filePath file path within emulated file system to download;"
+             + "\n\t\t:   fileName file name to download.}"
+             + " {JavaScript commands}");
+    this.eval ("help jsupload "
+             + "{jsupload fileUrl [filePath]"
+             + "\n\t\t: Upload file to emulated file system"
+             + "\n\t\t:   fileUrl  URL on server or . to show open file dialog;"
+             + "\n\t\t:   filePath file path within emulated file system to create.}"
+             + " {JavaScript commands}");
+
+    this.terminalPrintInputLine ("");
+  }
 //#endregion
 
-//#region Class properties
-
-  /**
-   * Terminal object.
-   */
-  _myTerm: null,
-
-  /**
-   * Terminal hello message.
-   */
-  _myTermHello: "Draw",
-
-  /**
-   * Number of manually entered into Terminal commands.
-   */
-  _myTermInCounter: 0,
-
-  /**
-   * Terminal input.
-   */
-  _myTermLine: "",
-
-  /**
-   * Commands input history (activated by up/down arrows).
-   */
-  _myTermHistory: [],
-
-  /**
-   * Currently displayed item from commands input history (activated by up/down arrows).
-   */
-  _myTermHistoryPos: -1,
-
-  /**
-   * Number of commands queued for sequential processing via setTimout().
-   */
-  _myNbTermInProgress:  0,
-
-  /**
-   * WASM loading state.
-   */
-  _myIsWasmLoaded: false,
-
-  /**
-   * Hidden file input field.
-   */
-  _myFileInput: null
-//#endregion
 };
 
-// Try some workarounds to avoid terminal being displayed with standard fonts
-// (we want our custom fonts with narrower letters).
-DRAWEXE.termInit();
-document.fonts.ready.then((fontFaceSet) => {
-  //console.log(fontFaceSet.size, 'FontFaces loaded. ' + document.fonts.check("15px 'Ubuntu Mono'"));
-  //DRAWEXE.termInit();
+//! Create WebAssembly module instance and wait.
+var DRAWEXE = new DrawTerm();
+var aDrawWasmLoader = createDRAWEXE (DRAWEXE);
+
+document.fonts.ready.then ((theFontFaceSet) => {
+  // Try some workarounds to avoid terminal being displayed with standard fonts
+  // (we want our custom fonts with narrower letters).
+  //console.log (theFontFaceSet.size, 'FontFaces loaded. ' + document.fonts.check("15px 'Ubuntu Mono'"));
   document.getElementById ('termId').style.display = "block";
   //DRAWEXE._myTerm.reset();
   //DRAWEXE._myTerm.setOption('fontFamily', 'Courier');
   //DRAWEXE._myTerm.setOption('fontFamily', 'Ubuntu Mono');
-})
-
-//! Create WebAssembly module instance and wait.
-const DRAWEXEInitialized = createDRAWEXE(DRAWEXE);
-DRAWEXEInitialized.then(function(Module) {
-  if (DRAWEXE._myTerm != null)
-  {
-    DRAWEXE._myIsWasmLoaded = true;
-    DRAWEXE.terminalWrite ("\n\r");
-    //DRAWEXE.eval("dversion");
-
-    // register JavaScript commands
-    DRAWEXE.eval ("help jsdownload "
-                + "{jsdownload filePath [fileName]"
-                + "\n\t\t: Download file from emulated file system"
-                + "\n\t\t:   filePath file path within emulated file system to download;"
-                + "\n\t\t:   fileName file name to download.}"
-                + " {JavaScript commands}");
-    DRAWEXE.eval ("help jsupload "
-                + "{jsupload fileUrl [filePath]"
-                + "\n\t\t: Upload file to emulated file system"
-                + "\n\t\t:   fileUrl  URL on server or . to show open file dialog;"
-                + "\n\t\t:   filePath file path within emulated file system to create.}"
-                + " {JavaScript commands}");
-
-    DRAWEXE.terminalPrintInputLine ("");
-  }
+  return aDrawWasmLoader;
+}).then ((theModule) =>
+{
+  DRAWEXE._onWasmCreated (theModule)
+  return Promise.resolve (true);
 });
