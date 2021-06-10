@@ -56,6 +56,9 @@ class DrawTerm
       this.canvas.focus()
     };
 
+    // tell Emscripten and Draw Harness to not use std::cin for commands input
+    this.noExitRuntime = true;
+
     // bind WebAssembly callbacks to this context
     this.print        = this.print.bind (this);
     this.printErr     = this.printErr.bind (this);
