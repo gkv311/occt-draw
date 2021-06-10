@@ -153,29 +153,38 @@ class DrawTerm
     {
       this._myTermHistoryPos = -1;
       this._myTermHistory.push (theCmd);
-      if (theCmd.startsWith ("jsdownload "))
+      try
       {
-        this._commandJsdownload (theCmd.substring (11).trim());
+        if (theCmd.startsWith ("jsdownload "))
+        {
+          this._commandJsdownload (theCmd.substring (11).trim());
+        }
+        else if (theCmd.startsWith ("jsdown "))
+        {
+          this._commandJsdownload (theCmd.substring (7).trim());
+        }
+        else if (theCmd.startsWith ("download "))
+        {
+          this._commandJsdownload (theCmd.substring (9).trim());
+        }
+        else if (theCmd.startsWith ("jsupload "))
+        {
+          this._commandJsupload (theCmd.substring (9).trim());
+        }
+        else if (theCmd.startsWith ("upload "))
+        {
+          this._commandJsupload (theCmd.substring (7).trim());
+        }
+        else
+        {
+          this.eval (theCmd);
+        }
       }
-      else if (theCmd.startsWith ("jsdown "))
+      catch (theErr)
       {
-        this._commandJsdownload (theCmd.substring (7).trim());
-      }
-      else if (theCmd.startsWith ("download "))
-      {
-        this._commandJsdownload (theCmd.substring (9).trim());
-      }
-      else if (theCmd.startsWith ("jsupload "))
-      {
-        this._commandJsupload (theCmd.substring (9).trim());
-      }
-      else if (theCmd.startsWith ("upload "))
-      {
-        this._commandJsupload (theCmd.substring (7).trim());
-      }
-      else
-      {
-        this.eval (theCmd);
+        this.terminalWriteError ("Internal error: " + theErr);
+        this.terminalPrintInputLine ("");
+        throw theErr;
       }
     }
     --this._myNbTermInProgress;
