@@ -50,6 +50,11 @@ class DrawTerm
 
     // define WebGL canvas for WebAssembly viewer
     this.canvas = document.getElementById ('occViewerCanvas'); // canvas element for OpenGL context
+    this.canvas.tabIndex = -1;
+    this.canvas.onclick = (theEvent) =>
+    {
+      this.canvas.focus()
+    };
 
     // bind WebAssembly callbacks to this context
     this.print        = this.print.bind (this);
