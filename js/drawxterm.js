@@ -50,13 +50,6 @@ class DrawTerm
 
     // prefix for DRAWEXE.data location
     this._myBasePrefix = "/";
-    //this._myBasePrefix = "/occt-draw/";
-    let aThisSubpath = "js/drawxterm.js";
-    if (document.currentScript && document.currentScript.src.endsWith (aThisSubpath))
-    {
-      // note - this will not work properly while importing module
-      this._myBasePrefix = document.currentScript.src.substring (0, document.currentScript.src.length - aThisSubpath.length)
-    }
 
     // define WebGL canvas for WebAssembly viewer
     this.canvas = document.getElementById ('occViewerCanvas'); // canvas element for OpenGL context
@@ -103,11 +96,30 @@ class DrawTerm
   }
 
   /**
+   * Set prefix for DRAWEXE.data location.
+   */
+  setBasePrefix (thePrefix)
+  {
+    this._myBasePrefix = thePrefix;
+  }
+
+  /**
+   * Clear terminal.
+   */
+  terminalClear()
+  {
+    if (this._myTerm !== null)
+    {
+      this._myTerm.clear();
+    }
+  }
+
+  /**
    * Print text into terminal.
    */
   terminalWrite (theText)
   {
-    if (this._myTerm != null)
+    if (this._myTerm !== null)
     {
       this._myTerm.write (theText);
     }
@@ -625,28 +637,45 @@ class DrawTerm
 };
 
 //! Create WebAssembly module instance and wait.
-var DRAWEXE = new DrawTerm();
-var aDrawWasmLoader = createDRAWEXE (DRAWEXE);
-aDrawWasmLoader.catch ((theError) =>
-{
-  DRAWEXE._myIsWasmLoaded = true;
-  DRAWEXE.terminalWriteError ("WebAssebly initialization has failed:\r\n" + theError);
-});
+var DRAWEXE = null;
 
-document.fonts.ready.then ((theFontFaceSet) => {
-  // Try some workarounds to avoid terminal being displayed with standard fonts
-  // (we want our custom fonts with narrower letters).
-  //console.log (theFontFaceSet.size, 'FontFaces loaded. ' + document.fonts.check("15px 'Ubuntu Mono'"));
-  document.getElementById ('termId').style.display = "block";
-  //DRAWEXE._myTerm.reset();
-  //DRAWEXE._myTerm.setOption('fontFamily', 'Courier');
-  //DRAWEXE._myTerm.setOption('fontFamily', 'Ubuntu Mono');
+// prefix for DRAWEXE.data location
+let _DRAWTERM_BASE_PREFIX = "/";
+if (document.currentScript && document.currentScript.src.endsWith ("js/drawxterm.js"))
+{
+  // note - this will not work properly while importing module
+  _DRAWTERM_BASE_PREFIX = document.currentScript.src.substring (0, document.currentScript.src.length - "js/drawxterm.js".length)
+}
+
+let aCreateDrawexeOld = createDRAWEXE;
+createDRAWEXE = function()
+{
+  DRAWEXE = new DrawTerm();
+  DRAWEXE.setBasePrefix (_DRAWTERM_BASE_PREFIX);
+  var aDrawWasmLoader = aCreateDrawexeOld (DRAWEXE);
+  aDrawWasmLoader.catch ((theError) =>
+  {
+    DRAWEXE._myIsWasmLoaded = true;
+    DRAWEXE.terminalWriteError ("WebAssebly initialization has failed:\r\n" + theError);
+  });
+
+  document.fonts.ready.then ((theFontFaceSet) => {
+    // Try some workarounds to avoid terminal being displayed with standard fonts
+    // (we want our custom fonts with narrower letters).
+    //console.log (theFontFaceSet.size, 'FontFaces loaded. ' + document.fonts.check("15px 'Ubuntu Mono'"));
+    document.getElementById ('termId').style.display = "block";
+    //DRAWEXE._myTerm.reset();
+    //DRAWEXE._myTerm.setOption('fontFamily', 'Courier');
+    //DRAWEXE._myTerm.setOption('fontFamily', 'Ubuntu Mono');
+    return aDrawWasmLoader;
+  }).then ((theModule) =>
+  {
+    DRAWEXE._onWasmCreated (theModule)
+    return Promise.resolve (true);
+  }).catch ((theError) =>
+  {
+    //
+  });
+
   return aDrawWasmLoader;
-}).then ((theModule) =>
-{
-  DRAWEXE._onWasmCreated (theModule)
-  return Promise.resolve (true);
-}).catch ((theError) =>
-{
-  //
-});
+};
