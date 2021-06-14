@@ -48,6 +48,16 @@ class DrawTerm
     this._myIsWasmLoaded = false; // WASM loading state
     this._myFileInput = null;     // Hidden file input field
 
+    // prefix for DRAWEXE.data location
+    this._myBasePrefix = "/";
+    //this._myBasePrefix = "/occt-draw/";
+    let aThisSubpath = "js/drawxterm.js";
+    if (document.currentScript && document.currentScript.src.endsWith (aThisSubpath))
+    {
+      // note - this will not work properly while importing module
+      this._myBasePrefix = document.currentScript.src.substring (0, document.currentScript.src.length - aThisSubpath.length)
+    }
+
     // define WebGL canvas for WebAssembly viewer
     this.canvas = document.getElementById ('occViewerCanvas'); // canvas element for OpenGL context
     this.canvas.tabIndex = -1;
@@ -63,6 +73,7 @@ class DrawTerm
     this.print        = this.print.bind (this);
     this.printErr     = this.printErr.bind (this);
     this.printMessage = this.printMessage.bind (this);
+    this.locateFile   = this.locateFile.bind (this);
   //#endregion
 
     this._myTerm = new Terminal({
@@ -573,7 +584,7 @@ class DrawTerm
     //console.warn(" @@ locateFile(" + thePath + ", " + thePrefix + ")");
     // thePrefix is JS file directory - override location of our DRAWEXE.data
     //return thePrefix + thePath;
-    return "wasm32/" + thePath;
+    return this._myBasePrefix + "wasm32/" + thePath;
   }
 
   /**
