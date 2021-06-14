@@ -175,6 +175,21 @@ class DrawTerm
   }
 
   /**
+   * Evaluate a sequence of command.
+   */
+  terminalPasteScript (theCommands)
+  {
+    if (this._myTerm !== null)
+    {
+      if (!theCommands.endsWith ("\n"))
+      {
+        theCommands += "\n";
+      }
+      this._myTerm.paste (theCommands);
+    }
+  }
+
+  /**
    * Evaluate a command from the queue.
    */
   termEvaluateCommand (theCmd)
