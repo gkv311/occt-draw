@@ -296,49 +296,54 @@ class DrawTerm
   /**
    * Evaluate a command from the queue.
    * @param[in] {string} theCmd command to execute
+   * @return {Promise} evaluation result as promise
    */
   termEvaluateCommand (theCmd)
   {
     //console.warn(" @@ termEvaluateCommand (" + theCmd + ")");
     if (theCmd === "")
     {
-      return;
+      return Promise.resolve (true);
     }
 
     this._myTermHistoryPos = -1;
     this._myTermHistory.push (theCmd);
     try
     {
+      let aRes = true;
       if (theCmd.startsWith ("jsdownload "))
       {
-        this._commandJsdownload (theCmd.substring (11).trim());
+        aRes = this._commandJsdownload (theCmd.substring (11).trim());
       }
       else if (theCmd.startsWith ("jsdown "))
       {
-        this._commandJsdownload (theCmd.substring (7).trim());
+        aRes = this._commandJsdownload (theCmd.substring (7).trim());
       }
       else if (theCmd.startsWith ("download "))
       {
-        this._commandJsdownload (theCmd.substring (9).trim());
+        aRes = this._commandJsdownload (theCmd.substring (9).trim());
       }
       else if (theCmd.startsWith ("jsupload "))
       {
-        this._commandJsupload (theCmd.substring (9).trim());
+        return this._commandJsupload (theCmd.substring (9).trim());
       }
       else if (theCmd.startsWith ("upload "))
       {
-        this._commandJsupload (theCmd.substring (7).trim());
+        return this._commandJsupload (theCmd.substring (7).trim());
       }
       else
       {
         this.eval (theCmd);
       }
+      if (aRes)
+      {
+        return Promise.resolve (true);
+      }
+      return Promise.reject (new Error ("Command evaluation failed"));
     }
     catch (theErr)
     {
-      this.terminalWriteError ("Internal error: " + theErr);
-      this.terminalPrintInputLine ("");
-      throw theErr;
+      return Promise.reject (new InternalError (theErr));
     }
   }
 
@@ -367,6 +372,7 @@ class DrawTerm
    * Fetch remote file from specified URL and upload it to emulated file system.
    * @param[in] {string} theFileUrl  URL to load
    * @param[in] {string} theFilePath file path on emulated file system (or empty string to take name from URL)
+   * @return {Promise} evaluation result as promise returning TRUE or Error
    */
   uploadUrl (theFileUrl, theFilePath)
   {
@@ -388,23 +394,28 @@ class DrawTerm
       if (!theResponse.ok) { throw new Error (`HTTP ${theResponse.status} - ${theResponse.statusText}`); }
       return theResponse;
     };
-    fetch (theFileUrl)
-    .then (theResponse => aCheckStatusFunc (theResponse) && theResponse.arrayBuffer())
-    .then (theBuffer => {
-      let aDataArray = new Uint8Array (theBuffer);
-      this.terminalWriteLine ("uploading file '" + aFileName + "' of size " + aDataArray.length + " bytes to '" + aFilePath + "'...");
-      this.FS.writeFile (aFilePath, aDataArray);
-      this.terminalPrintInputLine ("");
-    })
-    .catch (theErr => {
-      this.terminalWriteError ("Error: " + theErr);
-      this.terminalPrintInputLine ("");
+
+    return new Promise ((theResolve, theReject) =>
+    {
+      fetch (theFileUrl)
+      .then (theResponse => aCheckStatusFunc (theResponse) && theResponse.arrayBuffer())
+      .then (theBuffer => {
+        let aDataArray = new Uint8Array (theBuffer);
+        this.terminalWriteLine ("uploading file '" + aFileName + "' of size " + aDataArray.length + " bytes to '" + aFilePath + "'...");
+        this.FS.writeFile (aFilePath, aDataArray);
+        this.terminalPrintInputLine ("");
+        theResolve (true);
+      })
+      .catch (theErr => {
+        theReject (theErr);
+      });
     });
   }
 
   /**
    * Specify file on the local file system and upload it to emulated file system.
    * @param[in] {string} theFilePath file path on emulated file system (or empty string to take name from file)
+   * @return {Promise} evaluation result as promise returning TRUE or Error
    */
   uploadFile (theFilePath)
   {
@@ -416,30 +427,54 @@ class DrawTerm
       document.body.appendChild (this._myFileInput);
     }
 
-    this._myFileInput.onchange = () => {
-      if (this._myFileInput.files.length == 0)
-      {
-        this.terminalWriteError ("Error: no file chosen");
-        return;
-      }
-
-      let aFile = this._myFileInput.files[0];
-      let aReader = new FileReader();
-      aReader.onload = () => {
-        let aFilePath = theFilePath;
-        if (aFilePath === "")
+    return new Promise ((theResolve, theReject) =>
+    {
+      // File Input is a total failure in HTML, as there is NO event for handling user Cancel.
+      // Window focus change event is tracked instead to avoid DRAWEXE handling forever.
+      let hasResult = false;
+      const aCancelListener = () => {
+        window.removeEventListener ('focus',    aCancelListener);
+        window.removeEventListener ('touchend', aCancelListener);
+        setTimeout (() =>
         {
-          aFilePath = aFile.name;
+          if (!hasResult)
+          {
+            theReject (new Error ("no file chosen"));
+          }
+        }, 1000); // wait for a second as focus and onchange events happen simultaneously
+      };
+      window.addEventListener ('focus',    aCancelListener, { once: true });
+      window.addEventListener ('touchend', aCancelListener, { once: true });
+
+      this._myFileInput.onchange = () => {
+        hasResult = true;
+        window.removeEventListener ('focus',    aCancelListener);
+        window.removeEventListener ('touchend', aCancelListener);
+        if (this._myFileInput.files.length == 0)
+        {
+          theReject (new Error ("no file chosen"));
+          return;
         }
 
-        let aDataArray = new Uint8Array (aReader.result);
-        this.terminalWriteLine ("uploading file '" + aFile.name + "' of size " + aDataArray.length + " bytes to '" + aFilePath + "'...");
-        this.FS.writeFile (aFilePath, aDataArray);
-        this.terminalPrintInputLine ("")
+        let aFile = this._myFileInput.files[0];
+        let aReader = new FileReader();
+        aReader.onload = () => {
+          let aFilePath = theFilePath;
+          if (aFilePath === "")
+          {
+            aFilePath = aFile.name;
+          }
+
+          let aDataArray = new Uint8Array (aReader.result);
+          this.terminalWriteLine ("uploading file '" + aFile.name + "' of size " + aDataArray.length + " bytes to '" + aFilePath + "'...");
+          this.FS.writeFile (aFilePath, aDataArray);
+          this.terminalPrintInputLine ("")
+          theResolve (true);
+        };
+        aReader.readAsArrayBuffer (aFile);
       };
-      aReader.readAsArrayBuffer (aFile);
-    };
-    this._myFileInput.click();
+      this._myFileInput.click();
+    })
   }
 //#endregion
 
@@ -601,24 +636,23 @@ class DrawTerm
       this.terminalWrite (aCmd.command);
     }
 
-    try
+    this.termEvaluateCommand (aCmd.command).then ((theCmdStatus) =>
     {
-      this.termEvaluateCommand (aCmd.command);
       this.terminalPrintInputLine ("");
-    }
-    catch (theErr)
-    {
       if (!this._myCmdQueue.isEmpty())
       {
         setTimeout (() => { this._termPopCommandFromQueue(); }, this._myCmdTimeout);
       }
-      throw theErr;
-    }
-
-    if (!this._myCmdQueue.isEmpty())
+    }).catch ((theErr) =>
     {
-      setTimeout (() => { this._termPopCommandFromQueue(); }, this._myCmdTimeout);
-    }
+      //this.terminalPrintInputLine ("");
+      this.terminalWriteError (theErr);
+      this.terminalPrintInputLine ("");
+      if (!this._myCmdQueue.isEmpty())
+      {
+        setTimeout (() => { this._termPopCommandFromQueue(); }, this._myCmdTimeout);
+      }
+    });
   }
 //#endregion
 
@@ -627,6 +661,7 @@ class DrawTerm
   /**
    * Evaluate jsdownload command downloading file from emulated file system.
    * @param[in] {string} theArgs command arguments as string
+   * @return {boolean} evaluation result
    */
   _commandJsdownload (theArgs)
   {
@@ -634,7 +669,7 @@ class DrawTerm
     if (theArgs === "" || (anArgs.length != 1 && anArgs.length != 2))
     {
       this.terminalWriteError ("Syntax error: wrong number of arguments");
-      return;
+      return false;
     }
 
     let aFilePath = anArgs[0];
@@ -668,24 +703,26 @@ class DrawTerm
       let aData = this.FS.readFile (aFilePath);
       this.terminalWriteLine ("downloading file '" + aFileName + "' of size " + aData.length + " bytes...");
       this.downloadDataFile (aData, aFileName, aType);
+      return true;
     }
     catch (theError)
     {
       this.terminalWriteError ("Error: file '" + aFilePath + "' cannot be read with " + theError);
+      return false;
     }
   }
 
   /**
    * Evaluate jsupload command uploaded file to emulated file system.
    * @param[in] {string} theArgs command arguments as string
+   * @return {Promise} evaluation result as promise
    */
   _commandJsupload (theArgs)
   {
     let anArgs = theArgs.split (" ");
     if (theArgs === "" || (anArgs.length != 1 && anArgs.length != 2))
     {
-      this.terminalWriteError ("Syntax error: wrong number of arguments");
-      return;
+      return Promise.reject (new SyntaxError ("wrong number of arguments"));
     }
 
     let aFileUrl = anArgs[0];
@@ -697,11 +734,11 @@ class DrawTerm
 
     if (aFileUrl === ".")
     {
-      this.uploadFile (aFilePath)
+      return this.uploadFile (aFilePath)
     }
     else
     {
-      this.uploadUrl (aFileUrl, aFilePath);
+      return this.uploadUrl (aFileUrl, aFilePath);
     }
   }
 //#endregion
