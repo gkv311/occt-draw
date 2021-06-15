@@ -3,6 +3,99 @@
  */
 
 /**
+ * Command in queue to execute.
+ */
+class DrawCommand
+{
+  /**
+   * Main constructor.
+   * @param[in] {string} theCmd command to execute
+   * @param[in] {boolean} theToEcho print command to terminal
+   */
+  constructor (theCmd, theToEcho)
+  {
+    this.command = theCmd;
+    this.toEcho  = theToEcho;
+    this._myNext = null;
+  }
+};
+
+/**
+ * Queue of commands to execute.
+ */
+class DrawCommandQueue
+{
+  /**
+   * Empty constructor.
+   */
+  constructor()
+  {
+    this._myFirst  = null;
+    this._myLast   = null;
+    this._myLength = 0;
+  }
+
+  /**
+   * @return {boolean} TRUE if queue is empty
+   */
+  isEmpty()
+  {
+    return this._myLength === 0;
+  }
+
+  /**
+   * @return {number} queue extent
+   */
+  extent()
+  {
+    return this._myLength;
+  }
+
+  /**
+   * Add new command at the end of the queue.
+   * @param[in] {DrawCommand} command to append into queue
+   */
+  add (theCmd)
+  {
+    if (this._myLast != null)
+    {
+      this._myLast._myNext = theCmd;
+      this._myLast = theCmd;
+      this._myLength += 1;
+    }
+    else
+    {
+      this._myFirst  = theCmd;
+      this._myLast   = theCmd;
+      this._myLength = 1;
+    }
+  }
+
+  /**
+   * Remove the first command in the queue and return it.
+   * @return {DrawCommand} first command or NULL
+   */
+  pop()
+  {
+    if (this._myFirst == null)
+    {
+      return null;
+    }
+
+    let anItem = this._myFirst;
+    this._myFirst = anItem._myNext;
+    this._myLength -= 1;
+    if (this._myLength === 0)
+    {
+      this._myLast = null;
+    }
+
+    anItem._myNext = null;
+    return anItem;
+  }
+};
+
+/**
  * Main class interface - used as a base for initialization of WebAssembly module.
  */
 class DrawTerm
@@ -12,6 +105,7 @@ class DrawTerm
 
   /**
    * Check browser support.
+   * @return {boolean} TRUE if WASM supported
    */
   isWasmSupported() // static
   {
@@ -44,7 +138,8 @@ class DrawTerm
     this._myTermLine = "";        // Terminal input
     this._myTermHistory = [];     // Commands input history (activated by up/down arrows)
     this._myTermHistoryPos  = -1; // Currently displayed item from commands input history (activated by up/down arrows)
-    this._myNbTermInProgress = 0; // Number of commands queued for sequential processing via setTimout()
+    this._myCmdTimeout = 10;      // command delay for setTimout()
+    this._myCmdQueue = new DrawCommandQueue(); // commands queued for sequential processing via setTimout()
     this._myIsWasmLoaded = false; // WASM loading state
     this._myFileInput = null;     // Hidden file input field
 
@@ -97,6 +192,7 @@ class DrawTerm
 
   /**
    * Set prefix for DRAWEXE.data location.
+   * @param[in] {string} thePrefix new prefix to set
    */
   setBasePrefix (thePrefix)
   {
@@ -116,6 +212,7 @@ class DrawTerm
 
   /**
    * Print text into terminal.
+   * @param[in] {string} theText text to print
    */
   terminalWrite (theText)
   {
@@ -127,6 +224,7 @@ class DrawTerm
 
   /**
    * Print normal message into terminal.
+   * @param[in] {string} theText text to print
    */
   terminalWriteLine (theText)
   {
@@ -135,6 +233,7 @@ class DrawTerm
 
   /**
    * Print trace message into terminal.
+   * @param[in] {string} theText text to print
    */
   terminalWriteTrace (theText)
   {
@@ -143,6 +242,7 @@ class DrawTerm
 
   /**
    * Print info message into terminal.
+   * @param[in] {string} theText text to print
    */
   terminalWriteInfo (theText)
   {
@@ -151,6 +251,7 @@ class DrawTerm
 
   /**
    * Print warning message into terminal.
+   * @param[in] {string} theText text to print
    */
   terminalWriteWarning (theText)
   {
@@ -159,6 +260,7 @@ class DrawTerm
 
   /**
    * Print error message into terminal.
+   * @param[in] {string} theText text to print
    */
   terminalWriteError (theText)
   {
@@ -167,6 +269,7 @@ class DrawTerm
 
   /**
    * Move terminal input to the newline with the "Draw> " prefix.
+   * @param[in] {string} theLine text to print
    */
   terminalPrintInputLine (theLine)
   {
@@ -176,6 +279,7 @@ class DrawTerm
 
   /**
    * Evaluate a sequence of command.
+   * @param[in] {string} theCommands commands as a line-separated string
    */
   terminalPasteScript (theCommands)
   {
@@ -191,75 +295,58 @@ class DrawTerm
 
   /**
    * Evaluate a command from the queue.
+   * @param[in] {string} theCmd command to execute
    */
   termEvaluateCommand (theCmd)
   {
     //console.warn(" @@ termEvaluateCommand (" + theCmd + ")");
-    if (theCmd !== "")
+    if (theCmd === "")
     {
-      this._myTermHistoryPos = -1;
-      this._myTermHistory.push (theCmd);
-      try
+      return;
+    }
+
+    this._myTermHistoryPos = -1;
+    this._myTermHistory.push (theCmd);
+    try
+    {
+      if (theCmd.startsWith ("jsdownload "))
       {
-        if (theCmd.startsWith ("jsdownload "))
-        {
-          this._commandJsdownload (theCmd.substring (11).trim());
-        }
-        else if (theCmd.startsWith ("jsdown "))
-        {
-          this._commandJsdownload (theCmd.substring (7).trim());
-        }
-        else if (theCmd.startsWith ("download "))
-        {
-          this._commandJsdownload (theCmd.substring (9).trim());
-        }
-        else if (theCmd.startsWith ("jsupload "))
-        {
-          this._commandJsupload (theCmd.substring (9).trim());
-        }
-        else if (theCmd.startsWith ("upload "))
-        {
-          this._commandJsupload (theCmd.substring (7).trim());
-        }
-        else
-        {
-          this.eval (theCmd);
-        }
+        this._commandJsdownload (theCmd.substring (11).trim());
       }
-      catch (theErr)
+      else if (theCmd.startsWith ("jsdown "))
       {
-        this.terminalWriteError ("Internal error: " + theErr);
-        this.terminalPrintInputLine ("");
-        throw theErr;
+        this._commandJsdownload (theCmd.substring (7).trim());
+      }
+      else if (theCmd.startsWith ("download "))
+      {
+        this._commandJsdownload (theCmd.substring (9).trim());
+      }
+      else if (theCmd.startsWith ("jsupload "))
+      {
+        this._commandJsupload (theCmd.substring (9).trim());
+      }
+      else if (theCmd.startsWith ("upload "))
+      {
+        this._commandJsupload (theCmd.substring (7).trim());
+      }
+      else
+      {
+        this.eval (theCmd);
       }
     }
-    --this._myNbTermInProgress;
-  }
-
-  /**
-   * Put command into the execution queue.
-   */
-  termEvaluate (theToPrint)
-  {
-    let aCmd = this._myTermLine;
-    this._myTermLine = "";
-    //console.warn(" @@ termEvaluate (" + aCmd + ")");
-
-    // run multiple commands with N*10ms delay so that the user will see the progress
-    // (otherwise JavaScript will run all commands in one shot with hanging output)
-    ++this._myNbTermInProgress;
-    setTimeout (() => {
-      if (theToPrint) { this.terminalWrite (aCmd); }
-      this.termEvaluateCommand (aCmd);
+    catch (theErr)
+    {
+      this.terminalWriteError ("Internal error: " + theErr);
       this.terminalPrintInputLine ("");
-    }, (this._myNbTermInProgress - 1) * 10);
+      throw theErr;
+    }
   }
 
   /**
    * Function to download data to a file.
-   * @param {Uint8Array} theData [in] data to download
-   * @param {string} theFileName [in] default file name to download data as
-   * @param {string} theType [in] data MIME type
+   * @param[in] {Uint8Array} theData data to download
+   * @param[in] {string} theFileName default file name to download data as
+   * @param[in] {string} theType data MIME type
    */
   downloadDataFile (theData, theFileName, theType)
   {
@@ -278,8 +365,8 @@ class DrawTerm
 
   /**
    * Fetch remote file from specified URL and upload it to emulated file system.
-   * @param {string} theFileUrl  [in] URL to load
-   * @param {string} theFilePath [in] file path on emulated file system (or empty string to take name from URL)
+   * @param[in] {string} theFileUrl  URL to load
+   * @param[in] {string} theFilePath file path on emulated file system (or empty string to take name from URL)
    */
   uploadUrl (theFileUrl, theFilePath)
   {
@@ -317,7 +404,7 @@ class DrawTerm
 
   /**
    * Specify file on the local file system and upload it to emulated file system.
-   * @param {string} theFilePath [in] file path on emulated file system (or empty string to take name from file)
+   * @param[in] {string} theFilePath file path on emulated file system (or empty string to take name from file)
    */
   uploadFile (theFilePath)
   {
@@ -370,6 +457,8 @@ class DrawTerm
 
   /**
    * Terminal custom key event handler.
+   * @param[in] {KeyboardEvent} theEvent input key
+   * @return {boolean} FALSE if key should be ignored
    */
   _onTermKeyEvent (theEvent)
   {
@@ -430,6 +519,7 @@ class DrawTerm
 
   /**
    * Terminal data input callback.
+   * @param[in] {string} theEvent input data as string
    */
   _onTermDataInput (theEvent)
   {
@@ -450,9 +540,11 @@ class DrawTerm
       }
       else if (aChar === "\x0d")
       {
-        if (this.isComplete (this._myTermLine))
+        let aCmd = this._myTermLine;
+        if (this.isComplete (aCmd))
         {
-          this.termEvaluate (aNbNewLines != 0);
+          this._myTermLine = "";
+          this._termQueueCommand (aCmd, aNbNewLines != 0);
           ++aNbNewLines;
         }
         else
@@ -475,12 +567,66 @@ class DrawTerm
       }
     }
   }
+
+  /**
+   * Put command into the execution queue.
+   * @param[in] {string} theCmd command to execute
+   * @param[in] {boolean} theToEcho print command to terminal
+   */
+  _termQueueCommand (theCmd, theToEcho)
+  {
+    //console.warn(" @@ _termQueueCommand (" + theCmd + ")");
+    // run multiple commands with delay so that the user will see the progress
+    // (otherwise JavaScript will run all commands in one shot with hanging output)
+    this._myCmdQueue.add (new DrawCommand (theCmd, theToEcho));
+    if (this._myCmdQueue.extent() == 1)
+    {
+      setTimeout (() => { this._termPopCommandFromQueue(); }, this._myCmdTimeout);
+    }
+  }
+
+  /**
+   * Pop and evaluate a command from the queue.
+   */
+  _termPopCommandFromQueue()
+  {
+    let aCmd = this._myCmdQueue.pop();
+    if (aCmd === null)
+    {
+      return;
+    }
+
+    if (aCmd.toEcho)
+    {
+      this.terminalWrite (aCmd.command);
+    }
+
+    try
+    {
+      this.termEvaluateCommand (aCmd.command);
+      this.terminalPrintInputLine ("");
+    }
+    catch (theErr)
+    {
+      if (!this._myCmdQueue.isEmpty())
+      {
+        setTimeout (() => { this._termPopCommandFromQueue(); }, this._myCmdTimeout);
+      }
+      throw theErr;
+    }
+
+    if (!this._myCmdQueue.isEmpty())
+    {
+      setTimeout (() => { this._termPopCommandFromQueue(); }, this._myCmdTimeout);
+    }
+  }
 //#endregion
 
 //#region Additional Tcl commands implemented in JavaScript
 
   /**
    * Evaluate jsdownload command downloading file from emulated file system.
+   * @param[in] {string} theArgs command arguments as string
    */
   _commandJsdownload (theArgs)
   {
@@ -531,6 +677,7 @@ class DrawTerm
 
   /**
    * Evaluate jsupload command uploaded file to emulated file system.
+   * @param[in] {string} theArgs command arguments as string
    */
   _commandJsupload (theArgs)
   {
@@ -563,6 +710,7 @@ class DrawTerm
 
   /**
    * C++ std::cout callback redirecting to Terminal.
+   * @param[in] {string} theText text to print
    */
   print (theText) {
     console.warn (theText);
@@ -572,6 +720,7 @@ class DrawTerm
 
   /**
    * C++ std::cerr callback redirecting to Terminal.
+   * @param[in] {string} theText text to print
    */
   printErr (theText) {
     console.warn (theText);
@@ -581,6 +730,8 @@ class DrawTerm
 
   /**
    * C++ Message::Send() callback redirecting to Terminal.
+   * @param[in] {string} theText text to print
+   * @param[in] {number} theGravity message gravity within 0..4 range
    */
   printMessage (theText, theGravity) {
     //console.warn(" @@ printMessage (" + theText + ")");
@@ -606,6 +757,9 @@ class DrawTerm
 
   /**
    * Callback returning file path for loading WebAssembly components.
+   * @param[in] {string} thePath file path to locate
+   * @param[in] {string} thePrefix default file prefix
+   * @return {string} full path to the resource
    */
   locateFile (thePath, thePrefix) {
     //console.warn(" @@ locateFile(" + thePath + ", " + thePrefix + ")");
