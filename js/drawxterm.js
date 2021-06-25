@@ -576,19 +576,29 @@ class DrawTerm
       else if (aChar === "\x0d")
       {
         let aCmd = this._myTermLine;
-        if (this.isComplete (aCmd))
+        if (aCmd.endsWith ("\\"))
         {
-          this._myTermLine = "";
-          this._termQueueCommand (aCmd, aNbNewLines != 0);
-          ++aNbNewLines;
+          // handle trailing slash (multiline input)
+          this._myTermLine = this._myTermLine.substring (0, this._myTermLine.length - 1);
+          if (aNbNewLines == 0)
+          {
+            this.terminalWrite ("\n\r> ");
+          }
         }
-        else
+        else if (!this.isComplete (aCmd))
         {
+          // handle incomplete Tcl input (missing closing bracket)
           this._myTermLine += "\n\r";
           if (aNbNewLines == 0)
           {
             this.terminalWrite ("\n\r> ");
           }
+        }
+        else
+        {
+          this._myTermLine = "";
+          this._termQueueCommand (aCmd, aNbNewLines != 0);
+          ++aNbNewLines;
         }
       }
       // if (aChar === "\x1b[A"), "\x1b[B" up/down arrows are handled by attachCustomKeyEventHandler()
