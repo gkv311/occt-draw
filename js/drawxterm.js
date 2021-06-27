@@ -372,9 +372,10 @@ class DrawTerm
    * Fetch remote file from specified URL and upload it to emulated file system.
    * @param[in] {string} theFileUrl  URL to load
    * @param[in] {string} theFilePath file path on emulated file system (or empty string to take name from URL)
+   * @param[in] {boolean} theToPreload decode image file using Emscripten plugins
    * @return {Promise} evaluation result as promise returning TRUE or Error
    */
-  uploadUrl (theFileUrl, theFilePath)
+  uploadUrl (theFileUrl, theFilePath, theToPreload)
   {
     let aPathSplit = theFileUrl.split ("/");
     let aFileName  = theFileUrl;
@@ -403,8 +404,21 @@ class DrawTerm
         let aDataArray = new Uint8Array (theBuffer);
         this.terminalWriteLine ("uploading file '" + aFileName + "' of size " + aDataArray.length + " bytes to '" + aFilePath + "'...");
         this.FS.writeFile (aFilePath, aDataArray);
-        this.terminalPrintInputLine ("");
-        theResolve (true);
+        if (theToPreload)
+        {
+          // decode image
+          this.FS.createPreloadedFile (!aFilePath.startsWith ("/") ? this.FS.cwd() : "/",
+                                       aFilePath,
+                                       aDataArray, true, true,
+                                       () => { theResolve (true); this.terminalPrintInputLine (""); },
+                                       () => { theReject (new Error ("Preload failed")); },
+                                       true); // file is already created
+        }
+        else
+        {
+          this.terminalPrintInputLine ("");
+          theResolve (true);
+        }
       })
       .catch (theErr => {
         theReject (theErr);
@@ -415,9 +429,10 @@ class DrawTerm
   /**
    * Specify file on the local file system and upload it to emulated file system.
    * @param[in] {string} theFilePath file path on emulated file system (or empty string to take name from file)
+   * @param[in] {boolean} theToPreload decode image file using Emscripten plugins
    * @return {Promise} evaluation result as promise returning TRUE or Error
    */
-  uploadFile (theFilePath)
+  uploadFile (theFilePath, theToPreload)
   {
     if (this._myFileInput == null)
     {
@@ -468,8 +483,21 @@ class DrawTerm
           let aDataArray = new Uint8Array (aReader.result);
           this.terminalWriteLine ("uploading file '" + aFile.name + "' of size " + aDataArray.length + " bytes to '" + aFilePath + "'...");
           this.FS.writeFile (aFilePath, aDataArray);
-          this.terminalPrintInputLine ("")
-          theResolve (true);
+          if (theToPreload)
+          {
+            // implicitly decode image
+            this.FS.createPreloadedFile (!aFilePath.startsWith ("/") ? this.FS.cwd() : "/",
+                                         aFilePath,
+                                         aDataArray, true, true,
+                                         () => { theResolve (true); this.terminalPrintInputLine (""); },
+                                         () => { theReject (new Error ("Preload failed")); },
+                                         true); // file is already created
+          }
+          else
+          {
+            this.terminalPrintInputLine ("");
+            theResolve (true);
+          }
         };
         aReader.readAsArrayBuffer (aFile);
       };
@@ -742,13 +770,14 @@ class DrawTerm
       aFilePath = anArgs[1];
     }
 
+    let toPreload = true; // TODO - make optional
     if (aFileUrl === ".")
     {
-      return this.uploadFile (aFilePath)
+      return this.uploadFile (aFilePath, toPreload)
     }
     else
     {
-      return this.uploadUrl (aFileUrl, aFilePath);
+      return this.uploadUrl (aFileUrl, aFilePath, toPreload);
     }
   }
 //#endregion
