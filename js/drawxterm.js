@@ -392,7 +392,7 @@ class DrawTerm
 
     const aCheckStatusFunc = function (theResponse)
     {
-      if (!theResponse.ok) { throw new Error (`HTTP ${theResponse.status} - ${theResponse.statusText}`); }
+      if (!theResponse.ok) { throw new Error ("HTTP " + theResponse.status + " - " + theResponse.statusText + " (URL: '" + theFileUrl + "')"); }
       return theResponse;
     };
 
@@ -411,7 +411,7 @@ class DrawTerm
                                        aFilePath,
                                        aDataArray, true, true,
                                        () => { theResolve (true); this.terminalPrintInputLine (""); },
-                                       () => { theReject (new Error ("Preload failed")); },
+                                       () => { theReject (new Error ("Preload '" + aFilePath + "' failed")); },
                                        true); // file is already created
         }
         else
@@ -758,27 +758,83 @@ class DrawTerm
   _commandJsupload (theArgs)
   {
     let anArgs = theArgs.split (" ");
-    if (theArgs === "" || (anArgs.length != 1 && anArgs.length != 2))
+    let toPreload = true; // TODO - make optional
+    let aSrcList = [];
+    let aDstList = [];
+    for (let anArgIter = 0; anArgIter < anArgs.length; ++anArgIter)
+    {
+      let aParam = anArgs[anArgIter];
+      if (aParam === "")
+      {
+        continue;
+      }
+
+      let aFilePath = "";
+      aSrcList.push (aParam);
+      if (anArgIter + 2 < anArgs.length
+       && anArgs[anArgIter + 1] === "-path")
+      {
+        aFilePath = anArgs[anArgIter + 2];
+        anArgIter += 2;
+      }
+      aDstList.push (aFilePath);
+    }
+    if (aSrcList.length === 0)
     {
       return Promise.reject (new SyntaxError ("wrong number of arguments"));
     }
 
-    let aFileUrl = anArgs[0];
-    let aFilePath = "";
-    if (anArgs.length >= 2)
+    let aPromises = [];
+    for (let aFileIter = 0; aFileIter < aSrcList.length; ++aFileIter)
     {
-      aFilePath = anArgs[1];
+      let aFileUrl  = aSrcList[aFileIter];
+      let aFilePath = aDstList[aFileIter];
+      if (aFileUrl === ".")
+      {
+        aPromises.push (this.uploadFile (aFilePath, toPreload));
+      }
+      else
+      {
+        aPromises.push (this.uploadUrl (aFileUrl, aFilePath, toPreload));
+      }
     }
+    if (aPromises.length === 1)
+    {
+      return aPromises[0];
+    }
+    if (typeof Promise.allSettled === "function")
+    {
+      return new Promise ((theResolve, theReject) =>
+      {
+        Promise.allSettled (aPromises)
+          .then (theResults =>
+          {
+            let aFailList = "";
+            let nbFails = 0;
+            theResults.forEach ((aResIter) => {
+              if (aResIter.status === "rejected")
+              {
+                ++nbFails;
+                if (aFailList.length !== 0)
+                {
+                  aFailList += "\r\n";
+                }
+                aFailList += aResIter.reason;
+              }
+            });
 
-    let toPreload = true; // TODO - make optional
-    if (aFileUrl === ".")
-    {
-      return this.uploadFile (aFilePath, toPreload)
+            if (nbFails === 0)
+            {
+              theResolve (true);
+            }
+            else
+            {
+              theReject (new Error (aFailList));
+            }
+	  });
+      });
     }
-    else
-    {
-      return this.uploadUrl (aFileUrl, aFilePath, toPreload);
-    }
+    return Promise.all (aPromises);
   }
 //#endregion
 
@@ -869,8 +925,8 @@ class DrawTerm
              + "\n\t\t:   fileName file name to download.}"
              + " {JavaScript commands}");
     this.eval ("help jsupload "
-             + "{jsupload fileUrl [filePath]"
-             + "\n\t\t: Upload file to emulated file system"
+             + "{jsupload fileUrl1 [-path filePath1] [fileUrl2 [-path filePath2]] ..."
+             + "\n\t\t: Upload files to emulated file system"
              + "\n\t\t:   fileUrl  URL on server or . to show open file dialog;"
              + "\n\t\t:   filePath file path within emulated file system to create.}"
              + " {JavaScript commands}");
