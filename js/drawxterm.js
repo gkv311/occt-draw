@@ -591,6 +591,25 @@ class DrawTerm
       {
         return false;
       }
+      case 45: // insert
+      {
+        return false;
+      }
+      case 112: // F1
+      case 113:
+      case 114:
+      case 115:
+      case 116:
+      case 117:
+      case 118:
+      case 119:
+      case 120:
+      case 121:
+      case 122:
+      case 123: // F12
+      {
+        return false;
+      }
     }
 
     // handle copy-paste via Ctrl+C and Ctrl+V
