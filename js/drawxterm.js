@@ -188,6 +188,9 @@ class DrawTerm
     this._myTerm.attachCustomKeyEventHandler (theEvent => { return this._onTermKeyEvent (theEvent) });
     this._myTerm.onData ((theEvent) => { this._onTermDataInput (theEvent) });
     this._myTerm.focus();
+
+    // prevent page scrolling on mouse wheel even within an empty terminal / at the end of terminal scroll
+    this._myTerm.element.addEventListener ("wheel", (theEvent) => { theEvent.preventDefault(); });
   }
 
   /**
