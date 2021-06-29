@@ -223,6 +223,18 @@ class DrawTerm
   }
 
   /**
+   * Print text into terminal with automatic LF -> CRLF correction.
+   * @param[in] {string} theText text to print
+   */
+  terminalWriteMultiline (theText)
+  {
+    if (this._myTerm !== null)
+    {
+      this._myTerm.write (theText.replace (/\n/g, '\n\r'));
+    }
+  }
+
+  /**
    * Print normal message into terminal.
    * @param[in] {string} theText text to print
    */
@@ -237,7 +249,7 @@ class DrawTerm
    */
   terminalWriteTrace (theText)
   {
-    this.terminalWrite ("\n\r\x1B[33m" + theText + "\x1B[0m");
+    this.terminalWriteMultiline ("\n\r\x1B[33m" + theText + "\x1B[0m");
   }
 
   /**
@@ -246,7 +258,7 @@ class DrawTerm
    */
   terminalWriteInfo (theText)
   {
-    this.terminalWrite ("\n\r\x1B[32;1m" + theText + "\x1B[0m");
+    this.terminalWriteMultiline ("\n\r\x1B[32;1m" + theText + "\x1B[0m");
   }
 
   /**
@@ -255,7 +267,7 @@ class DrawTerm
    */
   terminalWriteWarning (theText)
   {
-    this.terminalWrite ("\n\r\x1B[33;1m" + theText + "\x1B[0m");
+    this.terminalWriteMultiline ("\n\r\x1B[33;1m" + theText + "\x1B[0m");
   }
 
   /**
@@ -264,7 +276,7 @@ class DrawTerm
    */
   terminalWriteError (theText)
   {
-    this.terminalWrite ("\n\r\x1B[31;1m" + theText + "\x1B[0m");
+    this.terminalWriteMultiline ("\n\r\x1B[31;1m" + theText + "\x1B[0m");
   }
 
   /**
@@ -844,20 +856,20 @@ class DrawTerm
    * C++ std::cout callback redirecting to Terminal.
    * @param[in] {string} theText text to print
    */
-  print (theText) {
+  print (theText)
+  {
     console.warn (theText);
-    this.terminalWrite ("\n\r");
-    this.terminalWrite (theText);
+    this.printMessage (theText, -1);
   }
 
   /**
    * C++ std::cerr callback redirecting to Terminal.
    * @param[in] {string} theText text to print
    */
-  printErr (theText) {
+  printErr (theText)
+  {
     console.warn (theText);
-    this.terminalWrite ("\n\r");
-    this.terminalWrite (theText);
+    this.printMessage (theText, -1);
   }
 
   /**
@@ -865,7 +877,8 @@ class DrawTerm
    * @param[in] {string} theText text to print
    * @param[in] {number} theGravity message gravity within 0..4 range
    */
-  printMessage (theText, theGravity) {
+  printMessage (theText, theGravity)
+  {
     //console.warn(" @@ printMessage (" + theText + ")");
     switch (theGravity)
     {
@@ -884,7 +897,7 @@ class DrawTerm
         return;
     }
     this.terminalWrite ("\n\r");
-    this.terminalWrite (theText);
+    this.terminalWriteMultiline (theText);
   }
 
   /**
@@ -893,7 +906,8 @@ class DrawTerm
    * @param[in] {string} thePrefix default file prefix
    * @return {string} full path to the resource
    */
-  locateFile (thePath, thePrefix) {
+  locateFile (thePath, thePrefix)
+  {
     //console.warn(" @@ locateFile(" + thePath + ", " + thePrefix + ")");
     // thePrefix is JS file directory - override location of our DRAWEXE.data
     //return thePrefix + thePath;
