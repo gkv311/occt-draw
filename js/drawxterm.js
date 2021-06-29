@@ -136,6 +136,7 @@ class DrawTerm
     this._myTermHello = "Draw";   // Terminal hello message
     this._myTermInCounter = 0;    // Number of manually entered into Terminal commands
     this._myTermLine = "";        // Terminal input
+    this._myTermLineCharPos = 0;  // Terminal input character position (relative to the tail)
     this._myTermHistory = [];     // Commands input history (activated by up/down arrows)
     this._myTermHistoryPos  = -1; // Currently displayed item from commands input history (activated by up/down arrows)
     this._myCmdTimeout = 10;      // command delay for setTimout()
@@ -575,20 +576,107 @@ class DrawTerm
 
         let aHist = this._myTermHistory[this._myTermHistoryPos];
         this._myTermLine = aHist;
+        this._myTermLineCharPos = 0;
         this.terminalWrite (aHist);
         return false;
       }
       case 37: // ArrowLeft
+      {
+        if (theEvent.type === "keydown")
+        {
+          if (this._myTermLineCharPos > -this._myTermLine.length)
+          {
+            --this._myTermLineCharPos;
+            this.terminalWrite ("\x1b[1D");
+          }
+        }
+        return false;
+      }
       case 39: // ArrowRight
+      {
+        if (theEvent.type === "keydown")
+        {
+          if (this._myTermLineCharPos < 0)
+          {
+            ++this._myTermLineCharPos;
+            this.terminalWrite ("\x1b[1C");
+          }
+        }
+        return false;
+      }
+      case 8: // Backspace
+      {
+        if (theEvent.type !== "keydown")
+        {
+          return false;
+        }
+
+        if (this._myTermLineCharPos < 0)
+        {
+          // remove character in the middle
+          if (this._myTermLineCharPos > -this._myTermLine.length)
+          {
+            let aFront = this._myTermLine.substring (0, this._myTermLine.length + this._myTermLineCharPos - 1);
+            let aTail  = this._myTermLine.substring (this._myTermLine.length + this._myTermLineCharPos);
+            this.terminalWrite ("\b" + aTail + " ");
+            this.terminalWrite ("\x1b[" + (-this._myTermLineCharPos + 1) + "D");
+            this._myTermLine = aFront + aTail;
+          }
+        }
+        else if (this._myTermLine.length > 0)
+        {
+          this.terminalWrite ('\b \b');
+          this._myTermLine = this._myTermLine.substring (0, this._myTermLine.length - 1);
+        }
+        return false;
+      }
       case 46: // Delete
       {
+        if (theEvent.type === "keydown"
+         && this._myTermLineCharPos < 0)
+        {
+          let aFront = this._myTermLine.substring (0, this._myTermLine.length + this._myTermLineCharPos);
+          let aTail  = this._myTermLine.substring (this._myTermLine.length + this._myTermLineCharPos + 1);
+          this.terminalWrite (aTail + " ");
+          this.terminalWrite ("\x1b[" + (-this._myTermLineCharPos) + "D");
+          this._myTermLine = aFront + aTail;
+          ++this._myTermLineCharPos;
+        }
         return false;
       }
       case 33: // PageUp
       case 34: // PageDown
+      {
+        if (theEvent.type === "keydown")
+        {
+          this._myTerm.scrollPages (theEvent.keyCode == 33 ? -1 : 1);
+        }
+        return false;
+      }
       case 35: // End
+      {
+        if (theEvent.type === "keydown")
+        {
+          if (this._myTermLineCharPos < 0)
+          {
+            let aDelta = -this._myTermLineCharPos;
+            this._myTermLineCharPos = 0;
+            this.terminalWrite ("\x1b[" + aDelta + "C");
+          }
+        }
+        return false;
+      }
       case 36: // Home
       {
+        if (theEvent.type === "keydown")
+        {
+          if (this._myTermLineCharPos > -this._myTermLine.length)
+          {
+            let aDelta = this._myTermLine.length + this._myTermLineCharPos;
+            this._myTermLineCharPos = -this._myTermLine.length;
+            this.terminalWrite ("\x1b[" + aDelta + "D");
+          }
+        }
         return false;
       }
       case 45: // insert
@@ -636,19 +724,9 @@ class DrawTerm
     for (let anIter = 0; anIter < theEvent.length; ++anIter)
     {
       let aChar = theEvent.charAt (anIter);
-      if (aChar === "\x7f")
+      if (aChar === "\x0d") // CR
       {
-        if (this._myTermLine.length > 0)
-        {
-          if (aNbNewLines == 0)
-          {
-            this.terminalWrite ('\b \b');
-          }
-          this._myTermLine = this._myTermLine.substring (0, this._myTermLine.length - 1);
-        }
-      }
-      else if (aChar === "\x0d")
-      {
+        this._myTermLineCharPos = 0;
         let aCmd = this._myTermLine;
         if (aCmd.endsWith ("\\"))
         {
@@ -676,13 +754,26 @@ class DrawTerm
         }
       }
       // if (aChar === "\x1b[A"), "\x1b[B" up/down arrows are handled by attachCustomKeyEventHandler()
-      else
+      else // normal symbol
       {
-        if (aNbNewLines == 0)
+        if (this._myTermLineCharPos < 0)
         {
-          this.terminalWrite (aChar);
+          // insert character
+          let aFront = this._myTermLine.substring (0, this._myTermLine.length + this._myTermLineCharPos);
+          let aTail  = this._myTermLine.substring (this._myTermLine.length + this._myTermLineCharPos);
+          this.terminalWrite (aChar + aTail);
+          this.terminalWrite ("\x1b[" + (-this._myTermLineCharPos) + "D");
+          this._myTermLine = aFront + aChar + aTail;
         }
-        this._myTermLine += aChar;
+        else
+        {
+          // append character
+          if (aNbNewLines == 0)
+          {
+            this.terminalWrite (aChar);
+          }
+          this._myTermLine += aChar;
+        }
       }
     }
   }
