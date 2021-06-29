@@ -589,6 +589,18 @@ class DrawTerm
         return false;
       }
     }
+
+    // handle copy-paste via Ctrl+C and Ctrl+V
+    if (theEvent.key === 'c' && theEvent.ctrlKey)
+    {
+      let isCopyDone = document.execCommand ('copy');
+      return false;
+    }
+    if (theEvent.key === 'v' && theEvent.ctrlKey)
+    {
+      return false;
+    }
+
     return true;
   }
 
