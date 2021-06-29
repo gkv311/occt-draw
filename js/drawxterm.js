@@ -323,7 +323,10 @@ class DrawTerm
     }
 
     this._myTermHistoryPos = -1;
-    this._myTermHistory.push (theCmd);
+    if (!theCmd.startsWith ("#") && !theCmd.includes ("\n"))
+    {
+      this._myTermHistory.push (theCmd);
+    }
     try
     {
       let aRes = true;
