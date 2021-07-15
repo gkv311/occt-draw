@@ -897,7 +897,7 @@ class DrawTerm
    */
   _commandJsupload (theArgs)
   {
-    let anArgs = theArgs.split (" ");
+    let anArgs = theArgs.split (" ").filter (theVal => theVal !== "");
     let toPreload = true; // TODO - make optional
     let aSrcList = [];
     let aDstList = [];
