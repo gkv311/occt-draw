@@ -350,6 +350,17 @@ class DrawTerm
       {
         return this._commandJsupload (theCmd.substring (7).trim());
       }
+      else if (theCmd.startsWith ("jsasync "))
+      {
+        return new Promise ((theResolve, theReject) => {
+          this.evalAsyncCompleted = (theResult) => {
+            this.evalAsyncCompleted = undefined;
+            theResolve (theResult === 1);
+          };
+          this.evalAsyncCompleted = this.evalAsyncCompleted.bind (this);
+          this.evalAsync (theCmd.substring (8).trim());
+        });
+      }
       else
       {
         this.eval (theCmd);
@@ -971,7 +982,7 @@ class DrawTerm
             {
               theReject (new Error (aFailList));
             }
-	  });
+          });
       });
     }
     return Promise.all (aPromises);
@@ -1071,6 +1082,10 @@ class DrawTerm
              + "\n\t\t: Upload files to emulated file system"
              + "\n\t\t:   fileUrl  URL on server or . to show open file dialog;"
              + "\n\t\t:   filePath file path within emulated file system to create.}"
+             + " {JavaScript commands}");
+    this.eval ("help jsasync "
+             + "{jsasync command ..."
+             + "\n\t\t: Run Tcl command asynchronously.}"
              + " {JavaScript commands}");
 
     this.terminalPrintInputLine ("");
