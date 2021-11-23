@@ -999,7 +999,7 @@ proc checktrinfo {shape args} {
 
     # get current number of faces, triangles and nodes, value of max deflection
     set tri_info [trinfo ${shape}]
-    set triinfo_pattern "(\[0-9\]+) +faces(.*\[^0-9]\(\[0-9\]+) +empty faces)?.*\[^0-9]\(\[0-9\]+) +triangles.*\[^0-9]\(\[0-9\]+) +nodes.*deflection +(\[-0-9.+eE\]+)"
+    set triinfo_pattern "(\[0-9\]+) +faces(.*\[^0-9]\(\[0-9\]+) +empty faces)?.*\[^0-9]\(\[0-9\]+) +triangles.*\[^0-9]\(\[0-9\]+) +nodes.*Maximal deflection +(\[-0-9.+eE\]+)"
     if {![regexp "${triinfo_pattern}" ${tri_info} dump cur_nb_faces tmp cur_nb_empty_faces cur_nb_triangles cur_nb_nodes cur_deflection]} {
         puts "Error: command trinfo prints empty info"
     }
@@ -3656,51 +3656,71 @@ set tcl_prompt2 {puts -nonewline "> "}
 #################################################
 # the help command in TCL
 #################################################
-proc help {{command ""} {helpstring ""} {group "Procedures"}} {
+proc help {{theCommand ""} {theHelpString ""} {theGroup "Procedures"}} {
   global Draw_Helps Draw_Groups
-  if {$command == ""} {
+  if {$theCommand == ""} {
     # help general
-    foreach h [lsort [array names Draw_Groups]] {
-      dputs -intense "\n\n$h"
-      set i 0
-      foreach f [lsort $Draw_Groups($h)] {
-        if {$i == 0} {
-          puts ""
-          puts -nonewline "  "
+    set aCmdWidth 15
+    foreach aGrpIter [lsort [array names Draw_Groups]] {
+      dputs -intense "\n\n$aGrpIter"
+      set i 1
+      set aLine ""
+      foreach aCmdIter [lsort $Draw_Groups($aGrpIter)] {
+        if {$i == 1} {
+          puts -nonewline "$aLine\n"
+          set aLine "  "
         }
-        puts -nonewline $f
-        for {set j [string length $f]} {$j < 15} {incr j} {
-          puts -nonewline " "
+
+        append aLine $aCmdIter
+        set aLineLen [string length $aLine]
+        for {set j [expr $aLineLen + 1]} {$j < [expr $aCmdWidth * $i + 2]} {incr j} {
+          append aLine " "
         }
+        append aLine " "
         incr i
-        if {$i == 4} {set i 0}
+        if {$i == 5} {set i 1}
       }
-      puts ""
+      puts "$aLine"
     }
-  } elseif {$helpstring == ""} {
+  } elseif {$theHelpString == ""} {
     # help function
-    set isfound 0
-    foreach f [lsort [array names Draw_Helps]] {
-      if {[string match $command $f]} {
-        dputs -nonewline -intense $f
-        for {set j [string length $f]} {$j < 15} {incr j} {
-          puts -nonewline " "
+    set isFound 0
+    foreach aCmdIter [lsort [array names Draw_Helps]] {
+      if {[string match $theCommand $aCmdIter]} {
+        dputs -nonewline -intense $aCmdIter
+        set aLines [split $Draw_Helps($aCmdIter) "\n"]
+        set aNbLines [llength $aLines]
+        set isFirstLine 0
+        for {set aLineIter 0} {$aLineIter < $aNbLines} {incr aLineIter} {
+          set aLine [lindex $aLines $aLineIter]
+          if { "$aLine" == "" && ($aLineIter == 0 || $aLineIter == [expr $aNbLines - 1]) } { continue }
+          if { $isFirstLine == 0 } {
+            set isFirstLine 1
+            for {set j [string length $aCmdIter]} {$j < 15} {incr j} {
+              puts -nonewline " "
+            }
+            puts -nonewline " : "
+          } else {
+            if { ![string match "\t\t:*" $aLine] } {
+              puts -nonewline "                : "
+            }
+          }
+          puts -nonewline "${aLine}\n"
         }
-        puts " : $Draw_Helps($f)"
-        set isfound 1
+        set isFound 1
       }
     }
-    if {!$isfound} {
-      if {[string first * $command] != -1} {
+    if {!$isFound} {
+      if {[string first * $theCommand] != -1} {
         puts "No matching commands found!"
       } else {
-        puts "No help found for '$command'! Please try 'help $command*' to find matching commands."
+        puts "No help found for '$theCommand'! Please try 'help $theCommand*' to find matching commands."
       }
     }
   } else {
     # set help
-    lappend Draw_Groups($group) $command
-    set Draw_Helps($command) $helpstring
+    lappend Draw_Groups($theGroup) $theCommand
+    set Draw_Helps($theCommand) $theHelpString
   }
   flush stdout
 }
