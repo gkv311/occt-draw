@@ -95,6 +95,14 @@ class DrawCommandQueue
   }
 };
 
+// prefix for DRAWEXE.data location
+let _DRAWTERM_BASE_PREFIX = "/";
+if (document.currentScript && document.currentScript.src.endsWith ("js/drawxterm.js"))
+{
+  // note - this will not work properly while importing module
+  _DRAWTERM_BASE_PREFIX = document.currentScript.src.substring (0, document.currentScript.src.length - "js/drawxterm.js".length);
+}
+
 /**
  * Main class interface - used as a base for initialization of WebAssembly module.
  */
@@ -137,75 +145,100 @@ class DrawTerm
   /**
    * Init Module and load WASM file.
    */
-  async wasmLoad()
+  async init()
   {
-    return new Promise (
-      async (theResolve, theReject) =>
+    // Try some workarounds to avoid terminal being displayed with standard fonts
+    // (we want our custom fonts with narrower letters).
+    document.fonts.ready.then ((theFontFaceSet) =>
+    {
+      //console.log (theFontFaceSet.size, 'FontFaces loaded. ' + document.fonts.check("15px 'Ubuntu Mono'"));
+      document.getElementById ('termId').style.display = "block";
+      //this._myTerm.reset();
+      //this._myTerm.setOption('fontFamily', 'Courier');
+      //this._myTerm.setOption('fontFamily', 'Ubuntu Mono');
+    });
+
+    let anErr = null;
+    this.setBasePrefix (_DRAWTERM_BASE_PREFIX);
+
+    let aBackProps = {};
+    for (var aPropIter in this) { aBackProps[aPropIter] = this[aPropIter]; }
+
+    try
+    {
+      await this.wasmLoad();
+      //await createDRAWEXE (this);
+    }
+    catch (theErr1)
+    {
+      let toLoadThreads = this._myToPreferPthread && this.isAllowMultithreading();
+      if (toLoadThreads)
       {
         try
         {
-          let aLoaderModule = async () =>
+          // remove partially initialized fields
+          for (var aPropIter in this)
           {
-            let aLoaderPthreadModule = async () =>
-            {
-              this._myWasmBuild = "wasm32-pthread";
-              this.mainScriptUrlOrBlob = './DRAWEXE.js'; // for pthreads
-              let aModPath = this.locateFile ("DRAWEXE.js", "");
-              let aRet = await fetch (aModPath);
-              let aSrc = await aRet.text();
-              if (!aRet.ok)
-              {
-                throw new Error ("Fail to fetch DRAWEXE.js; response finished with " + aRet.status);
-              }
-              aSrc += '\nexport default createDRAWEXE';
-              const aBlob = new Blob ([aSrc], {type: 'text/javascript'});
-              let aModPThread = await import (URL.createObjectURL (aBlob));
-              return aModPThread;
-            }
+            if (aBackProps[aPropIter] === undefined) { delete this[aPropIter]; }
+          }
 
-            let aLoaderFallbacktModule = async () =>
-            {
-              this._myWasmBuild = "wasm32";
-              let aModPath = this.locateFile ("DRAWEXE.js", "");
-              let aRet = await fetch (aModPath);
-              let aSrc = await aRet.text();
-              if (!aRet.ok)
-              {
-                throw new Error ("Fail to fetch DRAWEXE.js; response finished with " + aRet.status);
-              }
-              aSrc += '\nexport default createDRAWEXE';
-              const aBlob = new Blob ([aSrc], {type: 'text/javascript'});
-              let aMod32 = await import (URL.createObjectURL (aBlob));
-              return aMod32;
-            }
+          this._myIsWasmLoaded = false;
+          this._myToPreferPthread = false;
+          await this.wasmLoad();
 
-            if (this.isAllowMultithreading())
-            {
-              try
-              {
-                return await aLoaderPthreadModule();
-              }
-              catch (theError)
-              {
-                this.terminalWriteError ("Unable to load multi-threaded DRAWEXE: " + theError);
-              }
-            }
-
-            return await aLoaderFallbacktModule();
-          };
-
-          let aMod = await aLoaderModule();
-          await aMod.default (this);
-
-          theResolve();
+          this.terminalWriteError (theErr1 + " [fallback to '" + this._myWasmBuild + "']");
         }
-        catch (theError)
+        catch (theErr2)
         {
-          this._myIsWasmLoaded = true;
-          this.terminalWriteError ("WebAssebly initialization has failed:\r\n" + theError);
-          theReject (theError);
+          anErr = theErr2;
         }
-      });
+      }
+      else
+      {
+        anErr = theErr1;
+      }
+    }
+
+    await document.fonts.ready;
+    if (anErr != null)
+    {
+      this._myIsWasmLoaded = true;
+      this.terminalWriteError (anErr);
+      return Promise.reject (anErr);
+    }
+
+    this._onWasmCreated();
+    return Promise.resolve (true);
+  }
+
+  /**
+   * Init Module and load WASM file.
+   */
+  async wasmLoad()
+  {
+    let toLoadThreads = this._myToPreferPthread && this.isAllowMultithreading();
+    this._myWasmBuild = toLoadThreads ? "wasm32-pthread" : "wasm32";
+    this.FS = null;
+    try
+    {
+      this.mainScriptUrlOrBlob = './DRAWEXE.js'; // for pthreads
+      let aModPath = this.locateFile ("DRAWEXE.js", "");
+      let aRet = await fetch (aModPath);
+      let aSrc = await aRet.text();
+      if (!aRet.ok)
+      {
+        return Promise.reject (new Error ("Fail to fetch DRAWEXE.js; response finished with " + aRet.status));
+      }
+      aSrc += '\nexport default createDRAWEXE';
+      const aBlob = new Blob ([aSrc], {type: 'text/javascript'});
+      let aModCreator = await import (URL.createObjectURL (aBlob));
+      await aModCreator.default (this);
+      return Promise.resolve (true);
+    }
+    catch (theError)
+    {
+      return Promise.reject (new Error ("WebAssembly '" + this._myWasmBuild + "' initialization has failed:\r\n" + theError));
+    }
   }
 
   /**
@@ -225,6 +258,7 @@ class DrawTerm
     this._myCmdTimeout = 10;      // command delay for setTimout()
     this._myCmdQueue = new DrawCommandQueue(); // commands queued for sequential processing via setTimout()
     this._myIsWasmLoaded = false; // WASM loading state
+    this._myToPreferPthread = true;
     this._myFileInput = null;     // Hidden file input field
 
     // prefix for DRAWEXE.data location
@@ -294,6 +328,22 @@ class DrawTerm
   setWasmBuild (theBuild)
   {
     this._myWasmBuild = theBuild;
+  }
+
+  /**
+   * Return flag to prefer multi-threaded WASM build; should be called before init().
+   */
+  toPreferPthread()
+  {
+    return this._myToPreferPthread;
+  }
+
+  /**
+   * Set flag to prefer multi-threaded WASM build; should be called before init().
+   */
+  setPreferPthread (theToPrefer)
+  {
+    this._myToPreferPthread = theToPrefer;
   }
 
   /**
@@ -1156,9 +1206,8 @@ class DrawTerm
   /**
    * WASM creation callback - manually called from Promise.
    */
-  _onWasmCreated (theModule)
+  _onWasmCreated()
   {
-    //let Module = theModule;
     this._myIsWasmLoaded = true;
     this.terminalWrite ("\n\r");
     //this.eval ("dversion");
@@ -1188,45 +1237,5 @@ class DrawTerm
 };
 
 //! Create WebAssembly module instance and wait.
-var DRAWEXE = null;
-
-// prefix for DRAWEXE.data location
-let _DRAWTERM_BASE_PREFIX = "/";
-if (document.currentScript && document.currentScript.src.endsWith ("js/drawxterm.js"))
-{
-  // note - this will not work properly while importing module
-  _DRAWTERM_BASE_PREFIX = document.currentScript.src.substring (0, document.currentScript.src.length - "js/drawxterm.js".length)
-}
-
-createDRAWEXE = function()
-{
-  DRAWEXE = new DrawTerm();
-  DRAWEXE.setBasePrefix (_DRAWTERM_BASE_PREFIX);
-  var aDrawWasmLoader = DRAWEXE.wasmLoad();
-  //DRAWEXE.setWasmBuild ("wasm32-pthread");
-  //var aDrawWasmLoader = createDRAWEXE (DRAWEXE);
-  aDrawWasmLoader.catch ((theError) =>
-  {
-    DRAWEXE._myIsWasmLoaded = true;
-    DRAWEXE.terminalWriteError ("WebAssembly initialization has failed:\r\n" + theError);
-  });
-
-  document.fonts.ready.then ((theFontFaceSet) => {
-    // Try some workarounds to avoid terminal being displayed with standard fonts
-    // (we want our custom fonts with narrower letters).
-    //console.log (theFontFaceSet.size, 'FontFaces loaded. ' + document.fonts.check("15px 'Ubuntu Mono'"));
-    document.getElementById ('termId').style.display = "block";
-    //DRAWEXE._myTerm.reset();
-    //DRAWEXE._myTerm.setOption('fontFamily', 'Courier');
-    //DRAWEXE._myTerm.setOption('fontFamily', 'Ubuntu Mono');
-    return aDrawWasmLoader;
-  }).then ((theModule) =>
-  {
-    DRAWEXE._onWasmCreated (theModule)
-    return Promise.resolve (true);
-  }).catch ((theError) =>
-  {
-    //
-  });
-  return aDrawWasmLoader;
-};
+var DRAWEXE = new DrawTerm();
+createDRAWEXE = function() { return DRAWEXE.init(); };
