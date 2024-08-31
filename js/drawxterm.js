@@ -221,8 +221,8 @@ class DrawTerm
     this.FS = null;
     try
     {
-      this.mainScriptUrlOrBlob = './DRAWEXE.js'; // for pthreads
       let aModPath = this.locateFile ("DRAWEXE.js", "");
+      this.mainScriptUrlOrBlob = aModPath; // for pthreads
       let aRet = await fetch (aModPath);
       let aSrc = await aRet.text();
       if (!aRet.ok)
