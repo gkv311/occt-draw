@@ -232,10 +232,19 @@ class DrawTerm
       {
         return Promise.reject (new Error (`Fail to fetch '${aModPath}'; response finished with ${aRet.status}.`));
       }
-      aSrc += '\nexport default createDRAWEXE';
-      const aBlob = new Blob ([aSrc], {type: 'text/javascript'});
-      let aModCreator = await import (URL.createObjectURL (aBlob));
-      await aModCreator.default (this);
+
+      // define default() loading function by amending JS code
+      //aSrc += '\nexport default createDRAWEXE';
+      //const aBlob = new Blob ([aSrc], {type: 'text/javascript'});
+      //let aModCreator = await import (URL.createObjectURL (aBlob));
+      //await aModCreator.default (this);
+
+      // define default() loading function
+      const aFunc = Function("module", "exports", aSrc);
+      let aModCreator = { exports: {} };
+      aFunc.call(aModCreator, aModCreator, aModCreator.exports);
+      await aModCreator.exports.default (this);
+
       return Promise.resolve (true);
     }
     catch (theError)
