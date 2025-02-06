@@ -112,20 +112,19 @@ class DrawTerm
 //#region Main interface
 
   /**
-   * Check browser support.
-   * @return {boolean} TRUE if WASM supported
+   * Try loading WASM module with specified bytecode.
    */
-  isWasmSupported() // static
+  probeWasm(theModuleCode) // static
   {
     try
     {
       if (typeof WebAssembly === "object"
        && typeof WebAssembly.instantiate === "function")
       {
-        const aDummyModule = new WebAssembly.Module (Uint8Array.of (0x0, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00));
+        const aDummyModule = new WebAssembly.Module(theModuleCode);
         if (aDummyModule instanceof WebAssembly.Module)
         {
-          return new WebAssembly.Instance (aDummyModule) instanceof WebAssembly.Instance;
+          return new WebAssembly.Instance(aDummyModule) instanceof WebAssembly.Instance;
         }
       }
     }
@@ -134,9 +133,19 @@ class DrawTerm
   }
 
   /**
+   * Return TRUE if WASM is supported by browser by loading simple module.
+   */
+  hasWasmSupport() { return this.probeWasm(Uint8Array.of(0x0, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00)); }
+
+  /**
+   * Return TRUE if WASM64 is supported by browser by loading 'module (memory i64 1)'.
+   */
+  hasWasm64Support() { return this.probeWasm(Uint8Array.of(0x0, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x05, 0x03, 0x01, 0x04, 0x01)); }
+
+  /**
    * Check if multithreading is allowed.
    */
-  isAllowMultithreading()
+  hasWasmPthreads()
   {
     return window.Worker !== undefined && window.Atomics !== undefined
         && window.SharedArrayBuffer !== undefined;
@@ -161,41 +170,20 @@ class DrawTerm
     let anErr = null;
     this.setBasePrefix (_DRAWTERM_BASE_PREFIX);
 
-    let aBackProps = {};
-    for (var aPropIter in this) { aBackProps[aPropIter] = this[aPropIter]; }
-
-    try
+    for (let aWasmIter of this._myWasmBuildList)
     {
-      await this.wasmLoad();
-      //await createDRAWEXE (this);
-    }
-    catch (theErr1)
-    {
-      let toLoadThreads = this._myToPreferPthread && this.isAllowMultithreading();
-      if (toLoadThreads)
+      try
       {
-        try
-        {
-          // remove partially initialized fields
-          for (var aPropIter in this)
-          {
-            if (aBackProps[aPropIter] === undefined) { delete this[aPropIter]; }
-          }
-
-          this._myIsWasmLoaded = false;
-          this._myToPreferPthread = false;
-          await this.wasmLoad();
-
-          this.terminalWriteError (theErr1 + " [fallback to '" + this._myWasmBuild + "']");
-        }
-        catch (theErr2)
-        {
-          anErr = theErr2;
-        }
+        await this.wasmLoad(aWasmIter);
+        //await createDRAWEXE(this);
+        anErr = null;
+        break;
       }
-      else
+      catch (theErr1)
       {
         anErr = theErr1;
+        this._myIsWasmLoaded = false;
+        this.terminalWriteWarning(theErr1);
       }
     }
 
@@ -214,11 +202,26 @@ class DrawTerm
   /**
    * Init Module and load WASM file.
    */
-  async wasmLoad()
+  async wasmLoad(theWasm)
   {
-    let toLoadThreads = this._myToPreferPthread && this.isAllowMultithreading();
-    this._myWasmBuild = toLoadThreads ? "wasm32-pthread" : "wasm32";
+    if (!this.hasWasmSupport())
+    {
+      return Promise.reject (new Error (`Skipping '${theWasm}' as WebAssembly support is unavailable.`));
+    }
+    if (theWasm.includes("wasm64") && !this.hasWasm64Support())
+    {
+      return Promise.reject (new String (`Skipping '${theWasm}' as 64-bit WebAssembly support is unavailable.`));
+    }
+    if (theWasm.includes("pthread") && !this.hasWasmPthreads())
+    {
+      return Promise.reject (new String (`Skipping '${theWasm}' as multi-threading is unavailable.`));
+    }
+
+    this._myWasmBuild = theWasm;
     this.FS = null;
+
+    let aBackProps = {};
+    for (let aPropIter in this) { aBackProps[aPropIter] = this[aPropIter]; }
     try
     {
       let aModPath = this.locateFile ("DRAWEXE.js", "");
@@ -227,7 +230,7 @@ class DrawTerm
       let aSrc = await aRet.text();
       if (!aRet.ok)
       {
-        return Promise.reject (new Error ("Fail to fetch DRAWEXE.js; response finished with " + aRet.status));
+        return Promise.reject (new Error (`Fail to fetch '${aModPath}'; response finished with ${aRet.status}.`));
       }
       aSrc += '\nexport default createDRAWEXE';
       const aBlob = new Blob ([aSrc], {type: 'text/javascript'});
@@ -237,7 +240,12 @@ class DrawTerm
     }
     catch (theError)
     {
-      return Promise.reject (new Error ("WebAssembly '" + this._myWasmBuild + "' initialization has failed:\r\n" + theError));
+      // remove partially initialized fields
+      for (let aPropIter in this)
+      {
+        if (aBackProps[aPropIter] === undefined) { delete this[aPropIter]; }
+      }
+      return Promise.reject (new Error (`WebAssembly '${this._myWasmBuild}' initialization has failed:\r\n${theError}`));
     }
   }
 
@@ -258,12 +266,12 @@ class DrawTerm
     this._myCmdTimeout = 10;      // command delay for setTimout()
     this._myCmdQueue = new DrawCommandQueue(); // commands queued for sequential processing via setTimout()
     this._myIsWasmLoaded = false; // WASM loading state
-    this._myToPreferPthread = true;
     this._myFileInput = null;     // Hidden file input field
 
     // prefix for DRAWEXE.data location
     this._myBasePrefix = "/";
-    this._myWasmBuild = "wasm32";
+    this._myWasmBuild = "";
+    this._myWasmBuildList = ["wasm64-pthread", "wasm64", "wasm32-pthread", "wasm32"];
 
     // define WebGL canvas for WebAssembly viewer
     this.canvas = document.getElementById ('occViewerCanvas'); // canvas element for OpenGL context
@@ -292,7 +300,7 @@ class DrawTerm
     });
 
     this._myTerm.open (document.getElementById ('termId'));
-    if (!this.isWasmSupported())
+    if (!this.hasWasmSupport())
     {
       this.terminalWrite ("\x1B[31;1mBrowser is too old - WebAssembly support is missing!\n\r"
                         + "Please check updates or install a modern browser.\x1B[0m\n\r");
@@ -331,19 +339,19 @@ class DrawTerm
   }
 
   /**
-   * Return flag to prefer multi-threaded WASM build; should be called before init().
+   * Return list of WASM configurations in descending loading priority order.
    */
-  toPreferPthread()
+  getWasmBuildList()
   {
-    return this._myToPreferPthread;
+    return this._myWasmBuildList;
   }
 
   /**
-   * Set flag to prefer multi-threaded WASM build; should be called before init().
+   * Set list of WASM configurations in descending loading priority order.
    */
-  setPreferPthread (theToPrefer)
+  setWasmBuildList (theList)
   {
-    this._myToPreferPthread = theToPrefer;
+    this._myWasmBuildList = theList;
   }
 
   /**
@@ -1209,6 +1217,7 @@ class DrawTerm
   _onWasmCreated()
   {
     this._myIsWasmLoaded = true;
+    this.terminalWrite (`  (loaded '${this._myWasmBuild}')`)
     this.terminalWrite ("\n\r");
     //this.eval ("dversion");
 
