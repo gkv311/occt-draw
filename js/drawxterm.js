@@ -996,6 +996,10 @@ class DrawTerm
     {
       //this.terminalPrintInputLine ("");
       this.terminalWriteError (theErr);
+      if (theErr.stack)
+      {
+	this.terminalWriteError (theErr.stack);
+      }
       this.terminalPrintInputLine ("");
       if (!this._myCmdQueue.isEmpty())
       {
