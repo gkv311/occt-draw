@@ -533,7 +533,7 @@ class DrawTerm
     }
     catch (theErr)
     {
-      return Promise.reject (new InternalError (theErr));
+      return Promise.reject (theErr);
     }
   }
 
