@@ -18,7 +18,6 @@ aSrcRoot=${aScriptPath}/${aDraco}.git
 aBuildRoot=${aScriptPath}/wasm-make
 aDestRoot=${aScriptPath}/wasm
 
-rm -r -f ${aBuildRoot}
 mkdir -p ${aBuildRoot}
 
 set -o pipefail
@@ -40,6 +39,7 @@ function buildArch {
 
   aBuildPath=${aBuildRoot}/${aDraco}-${anArch}-make
   CMAKE_INSTALL_PREFIX=${aDestRoot}/${aDraco}-${anArch}
+  rm -r -f ${aBuildPath}
   rm -r -f ${CMAKE_INSTALL_PREFIX}
 
   cmake -G "Ninja" \

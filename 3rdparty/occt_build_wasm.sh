@@ -28,38 +28,47 @@ DRACO_DIR=${aDestRoot}/draco-1.5.7
 #git clone https://github.com/gkv311/tcl.git -b core-8-6-11-wasm
 TCL_DIR=${aDestRoot}/tcl-8.6.11
 
-rm -r -f "${aBuildRoot}"
 mkdir -p "${aBuildRoot}"
+toClean=1
 
 set -o pipefail
 
 function buildArch {
   anArch=$1
 
-  CMAKE_C_FLAGS=
-  CMAKE_LINKER_FLAGS=
   # wasm-exceptions are supported by all major browsers,
   # reduces WASM size and considerably speed-ups C++ exception handling.
   # But Emscripten 4.0.2 fails with internal error when linking DRAWEXE
   # when -fwasm-exceptions combined with OCC_CONVERT_SIGNALS,
   # while we want SIGSEV to be catched by DRAW...
+  #
+  # Note: -fwasm-exceptions should be passed to all other libraries (FreeType, Tcl, etc.),
+  #       even for C libraries (-fwasm-exceptions is for C++, but it also implicitly sets -sSUPPORT_LONGJMP=wasm)
   #CMAKE_C_FLAGS="-fwasm-exceptions"
+  CMAKE_C_FLAGS=
+
+  # increase stack size from 64KiB since Emscripten 3.1.27 (which is too small for OCCT) to 1MiB
+  CMAKE_LINKER_FLAGS="-sSTACK_SIZE=1048576"
+
   if [ "$anArch" == "wasm32" ]; then
-    CMAKE_C_FLAGS=
+    CMAKE_C_FLAGS="$CMAKE_C_FLAGS"
   elif [ "$anArch" == "wasm32-pthread" ]; then
     # -sMALLOC=mimalloc is faster, but allocates more memory
     # -sMAXIMUM_MEMORY=3328MB could be set for modern browsers to expand 2GB limit
-    CMAKE_C_FLAGS="-pthread"
+    CMAKE_C_FLAGS="$CMAKE_C_FLAGS -pthread"
   elif [ "$anArch" == "wasm64" ]; then
-    CMAKE_C_FLAGS="-sMEMORY64=1"
-    CMAKE_LINKER_FLAGS="-sMEMORY64=1 -sMAXIMUM_MEMORY=8000MB"
+    CMAKE_C_FLAGS="$CMAKE_C_FLAGS -sMEMORY64=1"
+    CMAKE_LINKER_FLAGS="$CMAKE_LINKER_FLAGS -sMEMORY64=1 -sMAXIMUM_MEMORY=8000MB"
   elif [ "$anArch" == "wasm64-pthread" ]; then
-    CMAKE_C_FLAGS="-pthread -sMEMORY64=1"
-    CMAKE_LINKER_FLAGS="-sMEMORY64=1 -sMAXIMUM_MEMORY=8000MB -sMALLOC=mimalloc"
+    CMAKE_C_FLAGS="$CMAKE_C_FLAGS -pthread -sMEMORY64=1"
+    CMAKE_LINKER_FLAGS="$CMAKE_LINKER_FLAGS -sMEMORY64=1 -sMAXIMUM_MEMORY=8000MB -sMALLOC=mimalloc"
   fi
 
   aBuildPath=${aBuildRoot}/${anOcctName}-${anArch}-make
   aLogFile=${aBuildPath}/build.log
+  if [ "$toClean" == "1" ]; then
+    rm -r -f "${aBuildPath}"
+  fi
 
   CMAKE_INSTALL_PREFIX=${aDestRoot}/${anOcctName}-${anArch}
   rm -r -f "$aLogFile"
@@ -107,10 +116,12 @@ function buildArch {
    -B "$aBuildPath" -S "$aSrcRoot" 2>&1 | tee "$aLogFile"
   aResult=$?; if [[ $aResult != 0 ]]; then exit $aResult; fi
 
-  cmake --build "$aBuildPath" --config Release --target clean
-  cmake --build "$aBuildPath" --config Release 2>&1 | tee "$aLogFile"
+  if [ "$toClean" == "1" ]; then
+    cmake --build "$aBuildPath" --config $CMAKE_BUILD_TYPE --target clean
+  fi
+  cmake --build "$aBuildPath" --config $CMAKE_BUILD_TYPE 2>&1 | tee "$aLogFile"
   aResult=$?; if [[ $aResult != 0 ]]; then exit $aResult; fi
-  cmake --build "$aBuildPath" --config Release --target install 2>&1 | tee "$aLogFile"
+  cmake --build "$aBuildPath" --config $CMAKE_BUILD_TYPE --target install 2>&1 | tee "$aLogFile"
 
   aDur=$(($SECONDS - $aTimeZERO))
   echo Building time: $aDur sec | tee "$aLogFile"

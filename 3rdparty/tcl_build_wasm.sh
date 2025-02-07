@@ -17,7 +17,6 @@ aSrcRoot=${aScriptPath}/${aTclName}.git
 aBuildRoot=${aScriptPath}/wasm-make
 aDestRoot=${aScriptPath}/wasm
 
-rm -r -f ${aBuildRoot}
 mkdir -p ${aBuildRoot}
 
 set -o pipefail
@@ -37,11 +36,10 @@ function buildArch {
     CMAKE_C_FLAGS="-pthread -sMEMORY64=1"
   fi
 
-  aSrcCopy=${aBuildRoot}/${aTclName}-${anArch}-src
-  rm -r -f "$aSrcCopy"
-  cp -r -f "$aSrcRoot" "$aSrcCopy"
-
   aBuildPath=${aBuildRoot}/${aTclName}-${anArch}-make
+  rm -r -f ${aBuildRoot}
+  cp -r -f "$aSrcRoot" "$aBuildPath"
+
   CMAKE_INSTALL_PREFIX=${aDestRoot}/${aTclName}-${anArch}
   rm -r -f ${CMAKE_INSTALL_PREFIX}
   mkdir -p "$CMAKE_INSTALL_PREFIX"
@@ -49,7 +47,7 @@ function buildArch {
   cp -f    "$aSrcRoot/README.md"     "$CMAKE_INSTALL_PREFIX/"
   echo "Output directory: $CMAKE_INSTALL_PREFIX"
 
-  pushd "$aSrcCopy/unix"
+  pushd "$aBuildPath/unix"
   export "CFLAGS=$CMAKE_C_FLAGS"
   export "CXXFLAGS=$CMAKE_C_FLAGS"
   #./configure --build x86_64-linux --host wasm32 --prefix=${CMAKE_INSTALL_PREFIX} 2>&1 | tee $CMAKE_INSTALL_PREFIX/config-wasm32.log
