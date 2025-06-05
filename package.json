@@ -1,0 +1,11 @@
+{
+  "name": "occt-draw",
+  "description": "Open CASCADE Technology DRAWEXE.js",
+  "type": "commonjs",
+  "scripts": {
+    "serve": "node server.js"
+  },
+  "devDependencies": {
+    "live-server": "^1.2.2"
+  }
+}

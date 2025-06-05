@@ -2,6 +2,7 @@ repository
 gallery
 _site
 node_modules
+package-lock.json
 validation-report.json
 validation-status.json
 deploy.sh
